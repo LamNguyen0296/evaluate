@@ -237,9 +237,39 @@
 
       async function renderMemberDashboard(key) {
         try {
-          const res = await fetch(`/api/member/${key}`, { cache: 'no-store' });
-          if (!res.ok) throw new Error('Failed to load member data');
-          const member = await res.json();
+          const [memberRes, roomCritRes, memberCritRes] = await Promise.all([
+            fetch(`/api/member/${key}`, { cache: 'no-store' }),
+            fetch('/api/criteria/roomCriteria', { cache: 'no-store' }),
+            fetch('/api/criteria/memberCriteria', { cache: 'no-store' })
+          ]);
+          if (!memberRes.ok) throw new Error('Failed to load member data');
+          const member = await memberRes.json();
+          const roomCrit = await roomCritRes.json();
+          const memCrit = await memberCritRes.json();
+
+          const ratingLevels = (roomCrit.ratingLevels && roomCrit.ratingLevels.length)
+            ? roomCrit.ratingLevels
+            : (memCrit.ratingLevels || []);
+
+          function sumMaxScore(criteria) {
+            return (criteria || []).reduce((s, c) => s + (c.maxScore || 0), 0);
+          }
+
+          function getExpectedScoreForLevel(levelId, maxScore) {
+            const percentage = [0, 0.25, 0.5, 0.75, 1.0];
+            return Math.round(maxScore * percentage[levelId] * 100) / 100;
+          }
+
+          function inferLevelByScore(score, maxScore) {
+            if (!maxScore || score <= 0) return null;
+            let best = { level: null, diff: Infinity };
+            ratingLevels.forEach(lvl => {
+              const expected = getExpectedScoreForLevel(lvl.id, maxScore);
+              const diff = Math.abs((score || 0) - expected);
+              if (diff < best.diff) best = { level: lvl, diff };
+            });
+            return best.level;
+          }
 
           const { card, body } = createCardNoHeader();
           
@@ -277,27 +307,10 @@
           const infoSection = document.createElement('div');
           infoSection.className = 'member-info-section';
           
-          // Điểm từng phần (sẽ hiển thị sau với nút xem chi tiết)
-          const detailSection = document.createElement('div');
-          detailSection.className = 'member-detail-section';
-          const detailTitle = document.createElement('h3');
-          detailTitle.textContent = 'Điểm từng phần';
-          const detailBtn = document.createElement('button');
-          detailBtn.className = 'button button-small';
-          detailBtn.textContent = 'Xem chi tiết';
-          detailBtn.addEventListener('click', () => {
-            // TODO: implement later - hiển thị detail_score
-            console.log('Detail scores:', member.detail_score);
-          });
-          detailSection.appendChild(detailTitle);
-          detailSection.appendChild(detailBtn);
-          
-          body.appendChild(headerRow);
-          body.appendChild(infoSection);
-          body.appendChild(detailSection);
-          // Nút Đánh giá cho member
+          // Nút Đánh giá cho member (di chuyển lên trên)
           const actionRow = document.createElement('div');
           actionRow.className = 'dashboard-actions';
+          actionRow.style.marginBottom = '24px';
           const evalBtn = document.createElement('button');
           evalBtn.className = 'button button-action button-evaluate';
           const evalIcon = document.createElement('span');
@@ -314,7 +327,132 @@
             }
           });
           actionRow.appendChild(evalBtn);
+          
+          // Điểm từng phần - hiển thị breakdown giống admin
+          const detailSection = document.createElement('div');
+          detailSection.className = 'member-detail-section';
+          const detailTitle = document.createElement('h3');
+          detailTitle.textContent = 'Điểm từng phần';
+          detailSection.appendChild(detailTitle);
+
+          // Total current score
+          const totalBox = document.createElement('div');
+          totalBox.className = 'detail-total-box';
+          totalBox.innerHTML = `<strong>Tổng điểm hiện có:</strong> <span class="detail-total-score">${member.score || 0}</span>`;
+          detailSection.appendChild(totalBox);
+
+          // Section: Điểm chủ phòng
+          const adminSection = document.createElement('div');
+          adminSection.className = 'detail-section';
+          const adminTitle = document.createElement('h4');
+          const roomMax = sumMaxScore(roomCrit.criteria);
+          const roomScore = (member.detail_score && member.detail_score.room && member.detail_score.room.score) || 0;
+          adminTitle.textContent = `Điểm chủ phòng (${roomScore}/${roomMax})`;
+          adminSection.appendChild(adminTitle);
+          const adminList = document.createElement('ul');
+          adminList.className = 'detail-list';
+          (roomCrit.criteria || []).forEach(c => {
+            const li = document.createElement('li');
+            const item = (member.detail_score && member.detail_score.room && member.detail_score.room.criteria || []).find(x => x.id === c.id);
+            if (item) {
+              const lvl = inferLevelByScore(item.score, c.maxScore);
+              const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+              li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${item.score} điểm)`;
+            } else {
+              li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+            }
+            adminList.appendChild(li);
+          });
+          adminSection.appendChild(adminList);
+          detailSection.appendChild(adminSection);
+
+          // Section: Avg điểm các nhóm
+          (async () => {
+            const memberMax = sumMaxScore(memCrit.criteria);
+            const otherMembers = (await (await fetch('/api/admin/members', { cache: 'no-store' })).json()).map(m => m.key).filter(k => k !== member.key);
+            const perMemberScores = [];
+            const memberSection = document.createElement('div');
+            memberSection.className = 'detail-section';
+            const memberList = document.createElement('ul');
+            memberList.className = 'detail-list';
+            otherMembers.forEach(k => {
+              const entry = member.detail_score && member.detail_score[k];
+              const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
+              perMemberScores.push(sc);
+              const li = document.createElement('li');
+              li.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
+              memberList.appendChild(li);
+              if (entry && entry.criteria && entry.criteria.length) {
+                const sub = document.createElement('ul');
+                sub.className = 'detail-sublist';
+                (memCrit.criteria || []).forEach(c => {
+                  const found = entry.criteria.find(x => x.id === c.id);
+                  const subLi = document.createElement('li');
+                  if (found) {
+                    const lvl = inferLevelByScore(found.score, c.maxScore);
+                    const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+                    subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
+                  } else {
+                    subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+                  }
+                  sub.appendChild(subLi);
+                });
+                memberList.appendChild(sub);
+              }
+            });
+            const memberAvg = perMemberScores.length ? Math.round((perMemberScores.reduce((a,b)=>a+b,0)/perMemberScores.length)*100)/100 : 0;
+            const memberTitle = document.createElement('h4');
+            memberTitle.textContent = `Trung bình điểm các nhóm (${memberAvg}/${memberMax})`;
+            memberSection.appendChild(memberTitle);
+            memberSection.appendChild(memberList);
+            detailSection.appendChild(memberSection);
+
+            // Section: Visitor
+            const visitorSection = document.createElement('div');
+            visitorSection.className = 'detail-section';
+            const visitors = (await (await fetch('/api/admin/visitors', { cache: 'no-store' })).json()).map(v => v.key);
+            const visitorList = document.createElement('ul');
+            visitorList.className = 'detail-list';
+            const visitorScores = [];
+            visitors.forEach(k => {
+              const entry = member.detail_score && member.detail_score[k];
+              const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
+              if (sc > 0) {
+                visitorScores.push(sc);
+                const li = document.createElement('li');
+                li.textContent = `Điểm ${k} (${sc}/${memberMax})`;
+                visitorList.appendChild(li);
+                if (entry && entry.criteria && entry.criteria.length) {
+                  const sub = document.createElement('ul');
+                  sub.className = 'detail-sublist';
+                  (memCrit.criteria || []).forEach(c => {
+                    const found = entry.criteria.find(x => x.id === c.id);
+                    const subLi = document.createElement('li');
+                    if (found) {
+                      const lvl = inferLevelByScore(found.score, c.maxScore);
+                      const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+                      subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
+                    } else {
+                      subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+                    }
+                    sub.appendChild(subLi);
+                  });
+                  visitorList.appendChild(sub);
+                }
+              }
+            });
+            const visitorAvg = visitorScores.length ? Math.round((visitorScores.reduce((a,b)=>a+b,0)/visitorScores.length)*100)/100 : 0;
+            const visitorTitle = document.createElement('h4');
+            visitorTitle.textContent = `Trung bình điểm Thầy/Cô (${visitorAvg}/${memberMax})`;
+            visitorSection.appendChild(visitorTitle);
+            visitorSection.appendChild(visitorList);
+            detailSection.appendChild(visitorSection);
+          })();
+          
+          body.appendChild(headerRow);
+          body.appendChild(infoSection);
           body.appendChild(actionRow);
+          body.appendChild(detailSection);
           app.appendChild(card);
         } catch (err) {
           app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Lỗi tải thông tin: ' + err.message + '</p></div></div>';
@@ -726,7 +864,7 @@
             const item = document.createElement('div');
             item.className = 'member-item';
             const statusDot = document.createElement('span');
-            statusDot.className = `status-dot ${m.isOnline ? 'online' : 'offline'}`;
+            statusDot.className = `member-dot status-dot ${m.isOnline ? 'online' : 'offline'}`;
             statusDot.title = m.isOnline ? 'Đang online' : 'Đã offline';
             const info = document.createElement('div');
             info.className = 'member-info';
@@ -742,8 +880,7 @@
             detailBtn.className = 'button button-small';
             detailBtn.textContent = 'Xem chi tiết';
             detailBtn.addEventListener('click', () => {
-              // TODO: implement later
-              alert('Tính năng đang phát triển');
+              openMemberDetailPopup(m.key);
             });
             item.appendChild(statusDot);
             item.appendChild(info);
@@ -790,6 +927,188 @@
         renderSummary();
       }
     })();
+
+    // Modal detail for member breakdown
+    async function openMemberDetailPopup(memberKey) {
+      try {
+        const [memberRes, roomCritRes, memberCritRes] = await Promise.all([
+          fetch(`/api/member/${memberKey}`, { cache: 'no-store' }),
+          fetch('/api/criteria/roomCriteria', { cache: 'no-store' }),
+          fetch('/api/criteria/memberCriteria', { cache: 'no-store' })
+        ]);
+        if (!memberRes.ok) throw new Error('Không tải được dữ liệu nhóm');
+        const member = await memberRes.json();
+        const roomCrit = await roomCritRes.json();
+        const memCrit = await memberCritRes.json();
+
+        const ratingLevels = (roomCrit.ratingLevels && roomCrit.ratingLevels.length)
+          ? roomCrit.ratingLevels
+          : (memCrit.ratingLevels || []);
+
+        function sumMaxScore(criteria) {
+          return (criteria || []).reduce((s, c) => s + (c.maxScore || 0), 0);
+        }
+
+        function getExpectedScoreForLevel(levelId, maxScore) {
+          const percentage = [0, 0.25, 0.5, 0.75, 1.0];
+          return Math.round(maxScore * percentage[levelId] * 100) / 100;
+        }
+
+        function inferLevelByScore(score, maxScore) {
+          if (!maxScore || score <= 0) return null;
+          let best = { level: null, diff: Infinity };
+          ratingLevels.forEach(lvl => {
+            const expected = getExpectedScoreForLevel(lvl.id, maxScore);
+            const diff = Math.abs((score || 0) - expected);
+            if (diff < best.diff) best = { level: lvl, diff };
+          });
+          return best.level;
+        }
+
+        // Build modal
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        const header = document.createElement('div');
+        header.className = 'modal-header';
+        const title = document.createElement('h3');
+        title.className = 'modal-title';
+        title.textContent = `${member.key.toUpperCase()} - ${member.name || 'Chưa có tên'}`;
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'button button-small modal-close';
+        closeBtn.textContent = 'Đóng';
+        closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+
+        // Total current score
+        const totalBox = document.createElement('div');
+        totalBox.className = 'detail-total-box';
+        totalBox.innerHTML = `<strong>Tổng điểm hiện có:</strong> <span class="detail-total-score">${member.score || 0}</span>`;
+        content.appendChild(totalBox);
+
+        // Section: Điểm chủ phòng
+        const adminSection = document.createElement('div');
+        adminSection.className = 'detail-section';
+        const adminTitle = document.createElement('h4');
+        const roomMax = sumMaxScore(roomCrit.criteria);
+        const roomScore = (member.detail_score && member.detail_score.room && member.detail_score.room.score) || 0;
+        adminTitle.textContent = `Điểm chủ phòng (${roomScore}/${roomMax})`;
+        adminSection.appendChild(adminTitle);
+        const adminList = document.createElement('ul');
+        adminList.className = 'detail-list';
+        (roomCrit.criteria || []).forEach(c => {
+          const li = document.createElement('li');
+          const item = (member.detail_score && member.detail_score.room && member.detail_score.room.criteria || []).find(x => x.id === c.id);
+          if (item) {
+            const lvl = inferLevelByScore(item.score, c.maxScore);
+            const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+            li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${item.score} điểm)`;
+          } else {
+            li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+          }
+          adminList.appendChild(li);
+        });
+        adminSection.appendChild(adminList);
+        content.appendChild(adminSection);
+
+        // Section: Avg điểm các nhóm
+        const memberSection = document.createElement('div');
+        memberSection.className = 'detail-section';
+        const memberMax = sumMaxScore(memCrit.criteria);
+        const otherMembers = (await (await fetch('/api/admin/members', { cache: 'no-store' })).json()).map(m => m.key).filter(k => k !== member.key);
+        const perMemberScores = [];
+        const memberList = document.createElement('ul');
+        memberList.className = 'detail-list';
+        otherMembers.forEach(k => {
+          const entry = member.detail_score && member.detail_score[k];
+          const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
+          perMemberScores.push(sc);
+          const li = document.createElement('li');
+          li.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
+          memberList.appendChild(li);
+          // criteria breakdown under each
+          if (entry && entry.criteria && entry.criteria.length) {
+            const sub = document.createElement('ul');
+            sub.className = 'detail-sublist';
+            (memCrit.criteria || []).forEach(c => {
+              const found = entry.criteria.find(x => x.id === c.id);
+              const subLi = document.createElement('li');
+              if (found) {
+                const lvl = inferLevelByScore(found.score, c.maxScore);
+                const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+                subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
+              } else {
+                subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+              }
+              sub.appendChild(subLi);
+            });
+            memberList.appendChild(sub);
+          }
+        });
+        const memberAvg = perMemberScores.length ? Math.round((perMemberScores.reduce((a,b)=>a+b,0)/perMemberScores.length)*100)/100 : 0;
+        const memberTitle = document.createElement('h4');
+        memberTitle.textContent = `Trung bình điểm các nhóm (${memberAvg}/${memberMax})`;
+        memberSection.appendChild(memberTitle);
+        memberSection.appendChild(memberList);
+        content.appendChild(memberSection);
+
+        // Section: Visitor
+        const visitorSection = document.createElement('div');
+        visitorSection.className = 'detail-section';
+        const visitors = (await (await fetch('/api/admin/visitors', { cache: 'no-store' })).json()).map(v => v.key);
+        const visitorList = document.createElement('ul');
+        visitorList.className = 'detail-list';
+        const visitorScores = [];
+        visitors.forEach(k => {
+          const entry = member.detail_score && member.detail_score[k];
+          const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
+          if (sc > 0) {
+            visitorScores.push(sc);
+            const li = document.createElement('li');
+            li.textContent = `Điểm ${k} (${sc}/${memberMax})`;
+            visitorList.appendChild(li);
+            if (entry && entry.criteria && entry.criteria.length) {
+              const sub = document.createElement('ul');
+              sub.className = 'detail-sublist';
+              (memCrit.criteria || []).forEach(c => {
+                const found = entry.criteria.find(x => x.id === c.id);
+                const subLi = document.createElement('li');
+                if (found) {
+                  const lvl = inferLevelByScore(found.score, c.maxScore);
+                  const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
+                  subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
+                } else {
+                  subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
+                }
+                sub.appendChild(subLi);
+              });
+              visitorList.appendChild(sub);
+            }
+          }
+        });
+        const visitorAvg = visitorScores.length ? Math.round((visitorScores.reduce((a,b)=>a+b,0)/visitorScores.length)*100)/100 : 0;
+        const visitorTitle = document.createElement('h4');
+        visitorTitle.textContent = `Trung bình điểm Thầy/Cô (${visitorAvg}/${memberMax})`;
+        visitorSection.appendChild(visitorTitle);
+        visitorSection.appendChild(visitorList);
+        content.appendChild(visitorSection);
+
+        modal.appendChild(header);
+        modal.appendChild(content);
+        overlay.appendChild(modal);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) document.body.removeChild(overlay);
+        });
+        document.body.appendChild(overlay);
+      } catch (err) {
+        alert('Không thể tải chi tiết: ' + err.message);
+      }
+    }
 
     // Socket.IO Status Indicator - Chỉ kết nối sau khi tham gia
     (function() {

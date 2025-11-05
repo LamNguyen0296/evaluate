@@ -3,14 +3,14 @@
         {
             "id": 10,
             "key": "room",
-            "name": "",
+            "name": "Admin",
             "rule": "admin",
             "evaluation_key": "roomCriteria"
         },
         {
             "id": 11,
             "key": "nhom1",
-            "name": "a",
+            "name": "",
             "rule": "member",
             "score": 46.67,
             "detail_score": {
@@ -40,27 +40,6 @@
                     ]
                 },
                 "nhom2": {
-                    "score": 0,
-                    "criteria": [
-                        {
-                            "id": 1,
-                            "score": 0
-                        },
-                        {
-                            "id": 2,
-                            "score": 0
-                        },
-                        {
-                            "id": 3,
-                            "score": 0
-                        },
-                        {
-                            "id": 4,
-                            "score": 0
-                        }
-                    ]
-                },
-                "nhom3": {
                     "score": 20,
                     "criteria": [
                         {
@@ -78,6 +57,27 @@
                         {
                             "id": 4,
                             "score": 6
+                        }
+                    ]
+                },
+                "nhom3": {
+                    "score": 0,
+                    "criteria": [
+                        {
+                            "id": 1,
+                            "score": 0
+                        },
+                        {
+                            "id": 2,
+                            "score": 0
+                        },
+                        {
+                            "id": 3,
+                            "score": 0
+                        },
+                        {
+                            "id": 4,
+                            "score": 0
                         }
                     ]
                 },
@@ -323,9 +323,9 @@
         {
             "id": 12,
             "key": "nhom2",
-            "name": "",
+            "name": "Pi",
             "rule": "member",
-            "score": 13,
+            "score": 0,
             "detail_score": {
                 "room": {
                     "score": 0,
@@ -353,44 +353,44 @@
                     ]
                 },
                 "nhom1": {
-                    "score": 19,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 4
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 1
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
                 "nhom3": {
-                    "score": 20,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 4
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 2
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
@@ -590,7 +590,7 @@
         {
             "id": 13,
             "key": "nhom3",
-            "name": "",
+            "name": "Kim Tự Tháp",
             "rule": "member",
             "score": 0,
             "detail_score": {
@@ -1207,7 +1207,7 @@
         {
             "id": 16,
             "key": "visitor1",
-            "name": "Như ý",
+            "name": "",
             "rule": "visitor",
             "evaluation_key": "memberCriteria"
         },

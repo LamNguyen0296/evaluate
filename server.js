@@ -37,6 +37,45 @@ function readCriteria() {
   return JSON.parse(raw);
 }
 
+// Compute final score for a single member based on current detail_score
+function computeFinalScoreForMember(data, member) {
+  let finalScore = 0;
+  const detailScore = member.detail_score || {};
+
+  // 1) Admin (room)
+  if (detailScore.room && typeof detailScore.room.score === 'number') {
+    finalScore += detailScore.room.score;
+  }
+
+  // 2) Member average (exclude self) — include zeros if present
+  const members = (data.members || []).filter(m => m.rule === 'member');
+  const memberEvaluations = [];
+  members.forEach(other => {
+    if (other.key !== member.key && detailScore[other.key] && typeof detailScore[other.key].score === 'number') {
+      memberEvaluations.push(detailScore[other.key].score);
+    }
+  });
+  if (memberEvaluations.length > 0) {
+    const memberAvg = memberEvaluations.reduce((a, b) => a + b, 0) / memberEvaluations.length;
+    finalScore += memberAvg;
+  }
+
+  // 3) Visitor average — exclude zeros
+  const visitors = (data.members || []).filter(m => m.rule === 'visitor');
+  const visitorEvaluations = [];
+  visitors.forEach(visitor => {
+    if (detailScore[visitor.key] && typeof detailScore[visitor.key].score === 'number' && detailScore[visitor.key].score > 0) {
+      visitorEvaluations.push(detailScore[visitor.key].score);
+    }
+  });
+  if (visitorEvaluations.length > 0) {
+    const visitorAvg = visitorEvaluations.reduce((a, b) => a + b, 0) / visitorEvaluations.length;
+    finalScore += visitorAvg;
+  }
+
+  return Math.round(finalScore * 100) / 100;
+}
+
 // API: list members by rule (used to populate group options)
 app.get('/api/members', (req, res) => {
   try {
@@ -169,13 +208,24 @@ app.post('/api/evaluate', (req, res) => {
     const totalScore = scores.reduce((sum, { score }) => sum + (score || 0), 0);
     detailEntry.score = totalScore;
 
+    // Recompute this target's final score immediately
+    if (targetMember.rule === 'member') {
+      targetMember.score = computeFinalScoreForMember(data, targetMember);
+    }
+
     // Save to file
     writeMembers(data);
 
-    // Emit event to trigger recalculation
+    // Emit event to trigger recalculation/refresh on clients
     io.emit('evaluation_submitted', { evaluatorKey, targetKey });
+    io.emit('member_score_updated', { key: targetMember.key, score: targetMember.score || 0 });
 
-    res.json({ ok: true, message: 'Đánh giá đã được lưu' });
+    // Debug log
+    try {
+      console.log('[EVALUATE] by=%s(%s) -> target=%s total=%s', evaluatorKey, evaluatorRole, targetKey, detailEntry.score);
+    } catch (_) {}
+
+    res.json({ ok: true, message: 'Đánh giá đã được lưu', storageKey, total: detailEntry.score, criteria: detailEntry.criteria, finalScore: targetMember.score || 0 });
   } catch (e) {
     res.status(500).json({ error: 'Failed to save evaluation: ' + e.message });
   }
@@ -188,41 +238,7 @@ app.post('/api/evaluate/finalize', (req, res) => {
     const members = data.members.filter(m => m.rule === 'member');
     
     members.forEach(member => {
-      let finalScore = 0;
-      const detailScore = member.detail_score || {};
-
-      // 1. Admin score (room)
-      if (detailScore.room && detailScore.room.score) {
-        finalScore += detailScore.room.score;
-      }
-
-      // 2. Member average (exclude self) - include score even if 0
-      const memberEvaluations = [];
-      members.forEach(other => {
-        if (other.key !== member.key && detailScore[other.key] && typeof detailScore[other.key].score === 'number') {
-          memberEvaluations.push(detailScore[other.key].score);
-        }
-      });
-      if (memberEvaluations.length > 0) {
-        const memberAvg = memberEvaluations.reduce((a, b) => a + b, 0) / memberEvaluations.length;
-        finalScore += memberAvg;
-      }
-
-      // 3. Visitor average - exclude entries where score == 0
-      const visitorEvaluations = [];
-      const visitors = data.members.filter(m => m.rule === 'visitor');
-      visitors.forEach(visitor => {
-        if (detailScore[visitor.key] && typeof detailScore[visitor.key].score === 'number' && detailScore[visitor.key].score > 0) {
-          visitorEvaluations.push(detailScore[visitor.key].score);
-        }
-      });
-      if (visitorEvaluations.length > 0) {
-        const visitorAvg = visitorEvaluations.reduce((a, b) => a + b, 0) / visitorEvaluations.length;
-        finalScore += visitorAvg;
-      }
-
-      // Update member score
-      member.score = Math.round(finalScore * 100) / 100; // Round to 2 decimals
+      member.score = computeFinalScoreForMember(data, member);
     });
 
     writeMembers(data);
@@ -270,6 +286,22 @@ app.post('/api/admin/reset', (req, res) => {
     res.json({ ok: true, backupFile: backupName, message: 'Đã làm mới dữ liệu thành công' });
   } catch (e) {
     res.status(500).json({ error: 'Reset failed: ' + e.message });
+  }
+});
+
+// API: recompute all member scores (room + avg member + avg visitor)
+app.post('/api/admin/recompute', (req, res) => {
+  try {
+    const data = readMembers();
+    const members = data.members.filter(m => m.rule === 'member');
+    members.forEach(member => {
+      member.score = computeFinalScoreForMember(data, member);
+    });
+    writeMembers(data);
+    io.emit('members_recomputed', {});
+    res.json({ ok: true, message: 'Đã tính lại điểm cho tất cả nhóm' });
+  } catch (e) {
+    res.status(500).json({ error: 'Recompute failed: ' + e.message });
   }
 });
 
