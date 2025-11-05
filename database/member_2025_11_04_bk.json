@@ -1,0 +1,177 @@
+{
+    "members": [
+        {
+            "id": 10,
+            "key": "room",
+            "name": "Admin",
+            "rule": "admin",
+            "evaluation_key": "roomCriteria"
+        },
+        {
+            "id": 11,
+            "key": "nhom1",
+            "name": "Pi",
+            "rule": "member",
+            "score": 0,
+            "detail_score": {
+                "room": 0,
+                "nhom2": 0,
+                "nhom3": 0,
+                "nhom4": 0,
+                "visitor": 0,
+                "visitor1": 0,
+                "visitor2": 0,
+                "visitor3": 0,
+                "visitor4": 0,
+                "visitor5": 0,
+                "visitor6": 0,
+                "visitor7": 0,
+                "visitor8": 0,
+                "visitor9": 0
+            },
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 12,
+            "key": "nhom2",
+            "name": "Pi",
+            "rule": "member",
+            "score": 0,
+            "detail_score": {
+                "room": 0,
+                "nhom1": 0,
+                "nhom3": 0,
+                "nhom4": 0,
+                "visitor": 0,
+                "visitor1": 0,
+                "visitor2": 0,
+                "visitor3": 0,
+                "visitor4": 0,
+                "visitor5": 0,
+                "visitor6": 0,
+                "visitor7": 0,
+                "visitor8": 0,
+                "visitor9": 0
+            },
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 13,
+            "key": "nhom3",
+            "name": "Kim Tự Tháp",
+            "rule": "member",
+            "score": 0,
+            "detail_score": {
+                "room": 0,
+                "nhom1": 0,
+                "nhom2": 0,
+                "nhom4": 0,
+                "visitor": 0,
+                "visitor1": 0,
+                "visitor2": 0,
+                "visitor3": 0,
+                "visitor4": 0,
+                "visitor5": 0,
+                "visitor6": 0,
+                "visitor7": 0,
+                "visitor8": 0,
+                "visitor9": 0
+            },
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 14,
+            "key": "nhom4",
+            "name": "",
+            "rule": "member",
+            "score": 0,
+            "detail_score": {
+                "room": 0,
+                "nhom1": 0,
+                "nhom2": 0,
+                "nhom3": 0,
+                "visitor": 0,
+                "visitor1": 0,
+                "visitor2": 0,
+                "visitor3": 0,
+                "visitor4": 0,
+                "visitor5": 0,
+                "visitor6": 0,
+                "visitor7": 0,
+                "visitor8": 0,
+                "visitor9": 0
+            },
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 15,
+            "key": "visitor",
+            "name": "Nhật Lam",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 16,
+            "key": "visitor1",
+            "name": "Như Ý",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 17,
+            "key": "visitor2",
+            "name": "Nhật Lam",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 18,
+            "key": "visitor3",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 19,
+            "key": "visitor4",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 20,
+            "key": "visitor5",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 21,
+            "key": "visitor6",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 22,
+            "key": "visitor7",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 23,
+            "key": "visitor8",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        },
+        {
+            "id": 24,
+            "key": "visitor9",
+            "name": "",
+            "rule": "visitor",
+            "evaluation_key": "memberCriteria"
+        }
+    ]
+}

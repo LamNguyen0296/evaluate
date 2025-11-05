@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluate</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <div class="overlay"></div>
+  <div id="socket-status" class="socket-status"></div>
+  <div id="app" class="page"></div>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    (function () {
+      const app = document.getElementById('app');
+      const params = new URLSearchParams(window.location.search);
+      window.isEvaluationMode = false;
+
+      function row(labelNode, inputNode) {
+        const line = document.createElement('div');
+        line.className = 'form-row';
+        const lbl = document.createElement('div');
+        lbl.className = 'label';
+        lbl.appendChild(labelNode);
+        const field = document.createElement('div');
+        field.className = 'field';
+        field.appendChild(inputNode);
+        line.appendChild(lbl);
+        line.appendChild(field);
+        return line;
+      }
+
+      function createCard(titleText) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const header = document.createElement('div');
+        header.className = 'card__header';
+        const h = document.createElement('h2');
+        h.className = 'card__title';
+        h.textContent = titleText;
+        header.appendChild(h);
+        const body = document.createElement('div');
+        body.className = 'card__body';
+        card.appendChild(header);
+        card.appendChild(body);
+        return { card, body };
+      }
+
+      function createCardNoHeader() {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const body = document.createElement('div');
+        body.className = 'card__body';
+        card.appendChild(body);
+        return { card, body };
+      }
+
+      async function fetchMembers() {
+        const res = await fetch('/api/members?rule=member', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Tải nhóm thất bại');
+        return await res.json();
+      }
+
+      function renderForm() {
+        app.innerHTML = '';
+        const { card, body } = createCard('Tham gia đánh giá');
+        const form = document.createElement('form');
+
+        // Row 1: radio role
+        const radiosWrap = document.createElement('div');
+        radiosWrap.className = 'radio-group';
+        const roles = [
+          { value: 'admin', label: 'Chủ phòng' },
+          { value: 'member', label: 'Nhóm' },
+          { value: 'visitor', label: 'Thầy/Cô' },
+        ];
+        roles.forEach(r => {
+          const id = 'role-' + r.value;
+          const label = document.createElement('label');
+          label.className = 'radio';
+          label.htmlFor = id;
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'role';
+          input.value = r.value;
+          input.id = id;
+          label.appendChild(input);
+          const span = document.createElement('span');
+          span.textContent = ' ' + r.label;
+          label.appendChild(span);
+          radiosWrap.appendChild(label);
+        });
+        form.appendChild(row(document.createTextNode('Quyền'), radiosWrap));
+
+        // Row 2: select group (only for member)
+        const groupSelect = document.createElement('select');
+        groupSelect.name = 'groupKey';
+        groupSelect.className = 'select';
+        const groupRow = row(document.createTextNode('Chọn nhóm'), groupSelect);
+        groupRow.style.display = 'none';
+        form.appendChild(groupRow);
+
+        // Row 3: name (hidden for admin)
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.name = 'name';
+        nameInput.placeholder = 'Tên hiển thị';
+        nameInput.className = 'input';
+        const nameRow = row(document.createTextNode('Tên'), nameInput);
+        nameRow.style.display = 'none';
+        form.appendChild(nameRow);
+
+        // Row 4: submit
+        const submit = document.createElement('button');
+        submit.type = 'submit';
+        submit.textContent = 'Tham gia';
+        submit.className = 'button';
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(submit);
+        form.appendChild(row(document.createTextNode(''), actions));
+
+        // Role change effects
+        form.addEventListener('change', async (e) => {
+          if (e.target && e.target.name === 'role') {
+            const role = e.target.value;
+            if (role === 'member') {
+              nameRow.style.display = '';
+              groupRow.style.display = '';
+              // load groups
+              try {
+                const groups = await fetchMembers();
+                groupSelect.innerHTML = '<option value="">-- Chọn nhóm --</option>';
+                groups.forEach(g => {
+                  const opt = document.createElement('option');
+                  opt.value = g.key;
+                  opt.textContent = g.key.toUpperCase();
+                  groupSelect.appendChild(opt);
+                });
+              } catch (err) {
+                alert('Không tải được danh sách nhóm');
+              }
+            } else if (role === 'visitor') {
+              groupRow.style.display = 'none';
+              nameRow.style.display = '';
+            } else {
+              groupRow.style.display = 'none';
+              nameRow.style.display = 'none';
+            }
+          }
+        });
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          const role = (fd.get('role') || '').toString();
+          const groupKey = (fd.get('groupKey') || '').toString();
+          const name = (fd.get('name') || '').toString().trim();
+          if (!role) return alert('Vui lòng chọn quyền');
+          if (role === 'member' && !groupKey) return alert('Vui lòng chọn nhóm');
+          if ((role === 'member' || role === 'visitor') && !name) return alert('Vui lòng nhập tên');
+          try {
+            const res = await fetch('/api/join', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ role, groupKey, name })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              alert(data.error || 'Tham gia thất bại');
+              return;
+            }
+            const next = new URL(window.location.href);
+            next.searchParams.set('key', data.key);
+            next.searchParams.set('role', data.role);
+            if (data.name) next.searchParams.set('name', data.name); else next.searchParams.delete('name');
+            window.location.replace(next.toString());
+          } catch (err) {
+            alert('Có lỗi xảy ra, vui lòng thử lại');
+          }
+        });
+
+        body.appendChild(form);
+        app.appendChild(card);
+      }
+
+      async function renderSummary() {
+        app.innerHTML = '';
+        const role = params.get('role') || '—';
+        const key = params.get('key') || '—';
+        const name = params.get('name') || '';
+
+        if (role === 'admin') {
+          await renderAdminDashboard();
+        } else if (role === 'member') {
+          await renderMemberDashboard(key);
+        } else {
+          const { card, body } = createCard('Thông tin truy cập');
+          const wrap = document.createElement('div');
+          wrap.className = 'summary';
+          const p1 = document.createElement('p');
+          p1.textContent = `Rule: ${role}`;
+          const p2 = document.createElement('p');
+          p2.textContent = `Account key: ${key}`;
+          wrap.appendChild(p1);
+          wrap.appendChild(p2);
+          if (role === 'visitor') {
+            const p3 = document.createElement('p');
+            p3.textContent = `Tên: ${name || '—'}`;
+            wrap.appendChild(p3);
+            // Nút Đánh giá cho visitor
+            const evalBtn = document.createElement('button');
+            evalBtn.textContent = 'Đánh giá';
+            evalBtn.className = 'button button-action button-evaluate';
+            evalBtn.addEventListener('click', () => {
+              window.isEvaluationMode = true;
+              if (typeof window.renderEvaluationForm === 'function') {
+                window.renderEvaluationForm();
+              }
+            });
+            body.appendChild(evalBtn);
+          }
+          const back = document.createElement('button');
+          back.textContent = 'Đổi lựa chọn';
+          back.className = 'button';
+          back.addEventListener('click', () => {
+            const url = new URL(window.location.href);
+            url.search = '';
+            window.location.replace(url.toString());
+          });
+          body.appendChild(wrap);
+          body.appendChild(back);
+          app.appendChild(card);
+        }
+      }
+
+      async function renderMemberDashboard(key) {
+        try {
+          const res = await fetch(`/api/member/${key}`, { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to load member data');
+          const member = await res.json();
+
+          const { card, body } = createCardNoHeader();
+          
+          // Header row: Avatar + Key + Name + Score (1 line)
+          const headerRow = document.createElement('div');
+          headerRow.className = 'member-header-row';
+          
+          const avatar = document.createElement('div');
+          avatar.className = 'member-avatar';
+          avatar.textContent = member.avatar || '👤';
+          
+          const keyDiv = document.createElement('div');
+          keyDiv.className = 'member-key';
+          keyDiv.textContent = member.key.toUpperCase();
+          
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'member-name';
+          nameDiv.textContent = member.name || 'Chưa có tên';
+          
+          const scoreDiv = document.createElement('div');
+          scoreDiv.className = 'member-score-header';
+          const scoreIcon = document.createElement('span');
+          scoreIcon.className = 'score-icon';
+          scoreIcon.textContent = '⭐';
+          const scoreValue = document.createElement('span');
+          scoreValue.textContent = member.score || 0;
+          scoreDiv.appendChild(scoreIcon);
+          scoreDiv.appendChild(scoreValue);
+          
+          headerRow.appendChild(avatar);
+          headerRow.appendChild(keyDiv);
+          headerRow.appendChild(nameDiv);
+          headerRow.appendChild(scoreDiv);
+          
+          const infoSection = document.createElement('div');
+          infoSection.className = 'member-info-section';
+          
+          // Điểm từng phần (sẽ hiển thị sau với nút xem chi tiết)
+          const detailSection = document.createElement('div');
+          detailSection.className = 'member-detail-section';
+          const detailTitle = document.createElement('h3');
+          detailTitle.textContent = 'Điểm từng phần';
+          const detailBtn = document.createElement('button');
+          detailBtn.className = 'button button-small';
+          detailBtn.textContent = 'Xem chi tiết';
+          detailBtn.addEventListener('click', () => {
+            // TODO: implement later - hiển thị detail_score
+            console.log('Detail scores:', member.detail_score);
+          });
+          detailSection.appendChild(detailTitle);
+          detailSection.appendChild(detailBtn);
+          
+          body.appendChild(headerRow);
+          body.appendChild(infoSection);
+          body.appendChild(detailSection);
+          // Nút Đánh giá cho member
+          const actionRow = document.createElement('div');
+          actionRow.className = 'dashboard-actions';
+          const evalBtn = document.createElement('button');
+          evalBtn.className = 'button button-action button-evaluate';
+          const evalIcon = document.createElement('span');
+          evalIcon.className = 'button-icon';
+          evalIcon.innerHTML = '⭐';
+          const evalText = document.createElement('span');
+          evalText.textContent = 'Đánh giá';
+          evalBtn.appendChild(evalIcon);
+          evalBtn.appendChild(evalText);
+          evalBtn.addEventListener('click', () => {
+            window.isEvaluationMode = true;
+            if (typeof window.renderEvaluationForm === 'function') {
+              window.renderEvaluationForm();
+            }
+          });
+          actionRow.appendChild(evalBtn);
+          body.appendChild(actionRow);
+          app.appendChild(card);
+        } catch (err) {
+          app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Lỗi tải thông tin: ' + err.message + '</p></div></div>';
+        }
+      }
+
+      window.renderEvaluationForm = async function renderEvaluationForm() {
+        app.innerHTML = '';
+        const key = params.get('key') || '';
+        const role = params.get('role') || '';
+        
+        if (!key || !role) {
+          app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Thiếu thông tin đăng nhập</p></div></div>';
+          return;
+        }
+
+        try {
+          const container = document.createElement('div');
+          container.className = 'evaluation-container';
+          
+          const title = document.createElement('h1');
+          title.className = 'evaluation-title';
+          title.textContent = 'Đánh giá';
+          const titleBox = document.createElement('div');
+          titleBox.className = 'evaluation-title-box';
+          titleBox.appendChild(title);
+          container.appendChild(titleBox);
+
+          if (role === 'admin') {
+            // Admin đánh giá 4 member
+            const membersRes = await fetch('/api/members?rule=member');
+            const members = await membersRes.json();
+            
+            // Get admin evaluation_key
+            const adminRes = await fetch('/api/member/room');
+            const admin = await adminRes.json();
+            const criteriaRes = await fetch(`/api/criteria/${admin.evaluation_key || 'roomCriteria'}`);
+            const criteriaData = await criteriaRes.json();
+
+            for (const member of members) {
+              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(memberCard);
+            }
+          } else if (role === 'member') {
+            // Member đánh giá 3 nhóm còn lại
+            const membersRes = await fetch('/api/members?rule=member');
+            const allMembers = await membersRes.json();
+            const otherMembers = allMembers.filter(m => m.key !== key);
+            
+            // Get member evaluation_key
+            const currentMemberRes = await fetch(`/api/member/${key}`);
+            const currentMember = await currentMemberRes.json();
+            const criteriaRes = await fetch(`/api/criteria/${currentMember.evaluation_key || 'memberCriteria'}`);
+            const criteriaData = await criteriaRes.json();
+
+            for (const member of otherMembers) {
+              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(memberCard);
+            }
+          } else if (role === 'visitor') {
+            // Visitor đánh giá 4 nhóm
+            const membersRes = await fetch('/api/members?rule=member');
+            const members = await membersRes.json();
+            
+            // Visitor dùng roomCriteria
+            const criteriaRes = await fetch('/api/criteria/roomCriteria');
+            const criteriaData = await criteriaRes.json();
+
+            for (const member of members) {
+              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(memberCard);
+            }
+          }
+
+          // Nút Hoàn thành (chỉ admin hiển thị)
+          if (role === 'admin') {
+            const finishBtn = document.createElement('button');
+            finishBtn.className = 'button button-action button-evaluate';
+            finishBtn.textContent = 'Hoàn thành đánh giá';
+            finishBtn.addEventListener('click', async () => {
+              if (!confirm('Xác nhận hoàn thành đánh giá và tính điểm cuối cùng?')) return;
+              try {
+                const res = await fetch('/api/evaluate/finalize', { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) {
+                  alert('Lỗi: ' + (data.error || 'Không thể hoàn thành đánh giá'));
+                  return;
+                }
+                alert('Đã tính điểm thành công!');
+                window.isEvaluationMode = false;
+                window.location.reload();
+              } catch (err) {
+                alert('Có lỗi xảy ra: ' + err.message);
+              }
+            });
+            container.appendChild(finishBtn);
+          }
+
+          app.appendChild(container);
+        } catch (err) {
+          app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Lỗi: ' + err.message + '</p></div></div>';
+        }
+      }
+
+      function createEvaluationCard(member, criteria, ratingLevels, evaluatorKey, evaluatorRole) {
+        const card = document.createElement('div');
+        card.className = 'card evaluation-card';
+        
+        const body = document.createElement('div');
+        body.className = 'card__body';
+        
+        // Title: member key + name
+        const evalHeader = document.createElement('div');
+        evalHeader.className = 'evaluation-card-title';
+        evalHeader.textContent = `${member.key.toUpperCase()} - ${member.name || 'Chưa có tên'}`;
+        body.appendChild(evalHeader);
+        
+        const form = document.createElement('form');
+        form.className = 'evaluation-form';
+        
+        const scores = {};
+        let totalMaxScore = 0;
+        
+        // Function to calculate score from level
+        function getScoreFromLevel(level, maxScore) {
+          // Level 4 = 100%, Level 3 = 75%, Level 2 = 50%, Level 1 = 25%
+          const percentage = [0, 0.25, 0.5, 0.75, 1.0];
+          return Math.round(maxScore * percentage[level] * 100) / 100;
+        }
+        
+        criteria.forEach(criterion => {
+          totalMaxScore += criterion.maxScore;
+          
+          const row = document.createElement('div');
+          row.className = 'evaluation-row';
+          
+          const header = document.createElement('div');
+          header.className = 'evaluation-header';
+          
+          const title = document.createElement('div');
+          title.className = 'evaluation-title-row';
+          const titleText = document.createElement('span');
+          titleText.className = 'evaluation-criterion-title';
+          titleText.textContent = criterion.name;
+          const maxScoreText = document.createElement('span');
+          maxScoreText.className = 'evaluation-max-score';
+          maxScoreText.textContent = `Tối đa: ${criterion.maxScore} điểm`;
+          title.appendChild(titleText);
+          title.appendChild(maxScoreText);
+          header.appendChild(title);
+          
+          const options = document.createElement('div');
+          options.className = 'evaluation-options';
+          
+          const selectedState = document.createElement('div');
+          selectedState.className = 'evaluation-selected-state';
+          selectedState.textContent = 'Chưa chọn';
+          selectedState.id = `state-${criterion.id}`;
+          
+          // Sort rating levels in descending order (4, 3, 2, 1)
+          const sortedLevels = [...ratingLevels].sort((a, b) => b.id - a.id);
+          
+          sortedLevels.forEach(level => {
+            const label = document.createElement('label');
+            label.className = 'evaluation-radio-option';
+            
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = `criterion-${criterion.id}`;
+            input.value = level.id;
+            input.dataset.criterionId = criterion.id;
+            input.dataset.maxScore = criterion.maxScore;
+            input.dataset.levelId = level.id;
+            
+            input.addEventListener('change', () => {
+              const score = getScoreFromLevel(level.id, criterion.maxScore);
+              scores[criterion.id] = { id: criterion.id, score: score, levelId: level.id };
+              selectedState.textContent = `${score} điểm`;
+              selectedState.style.color = '#3b82f6';
+              
+              // Update active state
+              options.querySelectorAll('.evaluation-radio-option').forEach(opt => {
+                opt.classList.remove('active');
+              });
+              label.classList.add('active');
+              
+              updateTotalScore();
+            });
+            
+            const emoji = document.createElement('span');
+            emoji.className = 'evaluation-emoji';
+            emoji.textContent = level.emoji;
+            
+            const text = document.createElement('span');
+            text.className = 'evaluation-option-text';
+            text.textContent = level.name;
+            
+            label.appendChild(input);
+            label.appendChild(emoji);
+            label.appendChild(text);
+            options.appendChild(label);
+          });
+          
+          row.appendChild(header);
+          row.appendChild(options);
+          row.appendChild(selectedState);
+          form.appendChild(row);
+        });
+
+        // Total score display
+        const totalScoreRow = document.createElement('div');
+        totalScoreRow.className = 'evaluation-total-score';
+        const totalScoreText = document.createElement('span');
+        totalScoreText.className = 'evaluation-total-text';
+        totalScoreText.textContent = 'Tổng điểm đánh giá: ';
+        const totalScoreValue = document.createElement('span');
+        totalScoreValue.className = 'evaluation-total-value';
+        totalScoreValue.textContent = '0';
+        const totalScoreMax = document.createElement('span');
+        totalScoreMax.className = 'evaluation-total-max';
+        totalScoreMax.textContent = ` / ${totalMaxScore}`;
+        totalScoreRow.appendChild(totalScoreText);
+        totalScoreRow.appendChild(totalScoreValue);
+        totalScoreRow.appendChild(totalScoreMax);
+        form.appendChild(totalScoreRow);
+        
+        function updateTotalScore() {
+          let total = 0;
+          Object.values(scores).forEach(scoreData => {
+            total += scoreData.score || 0;
+          });
+          totalScoreValue.textContent = Math.round(total * 100) / 100;
+        }
+
+        const submitBtn = document.createElement('button');
+        submitBtn.type = 'submit';
+        submitBtn.className = 'button evaluation-submit-btn';
+        submitBtn.textContent = 'Lưu đánh giá';
+        
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          // Validate all criteria are selected
+          if (Object.keys(scores).length !== criteria.length) {
+            alert('Vui lòng đánh giá tất cả các tiêu chí');
+            return;
+          }
+          
+          const scoreData = Object.values(scores).map(s => ({
+            id: s.id,
+            score: s.score
+          }));
+          
+          try {
+            const res = await fetch('/api/evaluate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                evaluatorKey,
+                evaluatorRole,
+                targetKey: member.key,
+                scores: scoreData
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              alert('Lỗi: ' + (data.error || 'Không thể lưu đánh giá'));
+              return;
+            }
+            alert('Đã lưu đánh giá cho ' + member.key.toUpperCase());
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đã lưu ✓';
+            submitBtn.style.background = '#22c55e';
+          } catch (err) {
+            alert('Có lỗi xảy ra: ' + err.message);
+          }
+        });
+        
+        form.appendChild(submitBtn);
+        body.appendChild(form);
+        card.appendChild(body);
+        
+        return card;
+      }
+
+      async function renderAdminDashboard() {
+        const container = document.createElement('div');
+        container.className = 'admin-dashboard';
+        
+        const titleBox = document.createElement('div');
+        titleBox.className = 'dashboard-title-box';
+        const title = document.createElement('h1');
+        title.className = 'dashboard-title';
+        title.textContent = 'Lớp 6/13';
+        titleBox.appendChild(title);
+        container.appendChild(titleBox);
+
+        const grid = document.createElement('div');
+        grid.className = 'dashboard-grid';
+
+        // Block trái: Danh sách members
+        const leftBlock = document.createElement('div');
+        leftBlock.className = 'dashboard-block';
+        const leftTitle = document.createElement('h2');
+        leftTitle.textContent = 'Danh sách nhóm';
+        leftBlock.appendChild(leftTitle);
+        const membersList = document.createElement('div');
+        membersList.className = 'members-list';
+        leftBlock.appendChild(membersList);
+        grid.appendChild(leftBlock);
+
+        // Block phải: Danh sách visitors online
+        const rightBlock = document.createElement('div');
+        rightBlock.className = 'dashboard-block';
+        const rightTitle = document.createElement('h2');
+        rightTitle.textContent = 'Thầy/Cô đang online';
+        rightBlock.appendChild(rightTitle);
+        const visitorsList = document.createElement('div');
+        visitorsList.className = 'visitors-list';
+        rightBlock.appendChild(visitorsList);
+        grid.appendChild(rightBlock);
+
+        container.appendChild(grid);
+
+        // Block dưới cùng: Action buttons
+        const actionBlock = document.createElement('div');
+        actionBlock.className = 'dashboard-actions';
+        
+        const evaluateBtn = document.createElement('button');
+        evaluateBtn.className = 'button button-action button-evaluate';
+        const evaluateIcon = document.createElement('span');
+        evaluateIcon.className = 'button-icon';
+        evaluateIcon.innerHTML = '⭐';
+        const evaluateText = document.createElement('span');
+        evaluateText.textContent = 'Đánh giá';
+        evaluateBtn.appendChild(evaluateIcon);
+        evaluateBtn.appendChild(evaluateText);
+        evaluateBtn.addEventListener('click', () => {
+          if (window.socket && typeof window.socket.emit === 'function') {
+            window.socket.emit('start_evaluation');
+          } else {
+            alert('Vui lòng đợi kết nối Socket.IO');
+          }
+        });
+        
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'button button-action button-refresh';
+        const refreshIcon = document.createElement('span');
+        refreshIcon.className = 'button-icon';
+        refreshIcon.innerHTML = '🔄';
+        const refreshText = document.createElement('span');
+        refreshText.textContent = 'Làm mới';
+        refreshBtn.appendChild(refreshIcon);
+        refreshBtn.appendChild(refreshText);
+        refreshBtn.addEventListener('click', async () => {
+          const confirmed = confirm('Bạn có chắc chắn muốn xoá toàn bộ dữ liệu? Dữ liệu hiện tại sẽ được backup.\n\nNhấn OK để tiếp tục, Cancel để hủy.');
+          if (!confirmed) return;
+
+          try {
+            const res = await fetch('/api/admin/reset', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              alert('Lỗi: ' + (data.error || 'Làm mới thất bại'));
+              return;
+            }
+            alert('Đã làm mới dữ liệu thành công!\nFile backup: ' + data.backupFile);
+            // Reload trang để cập nhật dữ liệu mới
+            window.location.reload();
+          } catch (err) {
+            alert('Có lỗi xảy ra: ' + err.message);
+          }
+        });
+        
+        actionBlock.appendChild(evaluateBtn);
+        actionBlock.appendChild(refreshBtn);
+        container.appendChild(actionBlock);
+
+        app.appendChild(container);
+
+        // Load và render data
+        await loadAndRenderMembers(membersList);
+        await loadAndRenderVisitors(visitorsList);
+
+        // Listen for status changes
+        if (window.socket && typeof window.socket.on === 'function') {
+          window.socket.on('member_status_change', async () => {
+            await loadAndRenderMembers(membersList);
+            await loadAndRenderVisitors(visitorsList);
+          });
+        }
+
+        // Auto refresh every 3 seconds
+        setInterval(async () => {
+          await loadAndRenderMembers(membersList);
+          await loadAndRenderVisitors(visitorsList);
+        }, 3000);
+      }
+
+      async function loadAndRenderMembers(container) {
+        try {
+          const res = await fetch('/api/admin/members', { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to load members');
+          const members = await res.json();
+          container.innerHTML = '';
+          members.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'member-item';
+            const statusDot = document.createElement('span');
+            statusDot.className = `status-dot ${m.isOnline ? 'online' : 'offline'}`;
+            statusDot.title = m.isOnline ? 'Đang online' : 'Đã offline';
+            const info = document.createElement('div');
+            info.className = 'member-info';
+            const keyName = document.createElement('div');
+            keyName.className = 'member-key-name';
+            keyName.textContent = `${m.key.toUpperCase()} - ${m.name || 'Chưa có tên'}`;
+            const score = document.createElement('div');
+            score.className = 'member-score';
+            score.textContent = `Điểm: ${m.score || 0}`;
+            info.appendChild(keyName);
+            info.appendChild(score);
+            const detailBtn = document.createElement('button');
+            detailBtn.className = 'button button-small';
+            detailBtn.textContent = 'Xem chi tiết';
+            detailBtn.addEventListener('click', () => {
+              // TODO: implement later
+              alert('Tính năng đang phát triển');
+            });
+            item.appendChild(statusDot);
+            item.appendChild(info);
+            item.appendChild(detailBtn);
+            container.appendChild(item);
+          });
+        } catch (err) {
+          container.innerHTML = '<p style="color: #ef4444;">Lỗi tải danh sách nhóm</p>';
+        }
+      }
+
+      async function loadAndRenderVisitors(container) {
+        try {
+          const res = await fetch('/api/admin/visitors', { cache: 'no-store' });
+          if (!res.ok) throw new Error('Failed to load visitors');
+          const visitors = await res.json();
+          container.innerHTML = '';
+          if (visitors.length === 0) {
+            container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 20px;">Chưa có Thầy/Cô nào đang online</p>';
+            return;
+          }
+          visitors.forEach(v => {
+            const item = document.createElement('div');
+            item.className = 'visitor-item';
+            const keyName = document.createElement('div');
+            keyName.className = 'visitor-key-name';
+            keyName.textContent = `Thầy/cô: ${v.name || 'Chưa có tên'}`;
+            const evaluated = document.createElement('div');
+            evaluated.className = 'visitor-evaluated';
+            evaluated.textContent = v.hasEvaluated ? 'Đã đánh giá' : 'Chưa đánh giá';
+            evaluated.style.color = v.hasEvaluated ? '#22c55e' : '#f59e0b';
+            item.appendChild(keyName);
+            item.appendChild(evaluated);
+            container.appendChild(item);
+          });
+        } catch (err) {
+          container.innerHTML = '<p style="color: #ef4444;">Lỗi tải danh sách Thầy/Cô</p>';
+        }
+      }
+
+      if (!params.has('key')) {
+        renderForm();
+      } else {
+        renderSummary();
+      }
+    })();
+
+    // Socket.IO Status Indicator - Chỉ kết nối sau khi tham gia
+    (function() {
+      const statusEl = document.getElementById('socket-status');
+      let socket = null;
+      const urlParams = new URLSearchParams(window.location.search);
+
+      function updateStatus(text, className) {
+        statusEl.textContent = text;
+        statusEl.className = 'socket-status ' + className;
+      }
+
+      function initSocket() {
+        // Chỉ kết nối nếu đã có params key (đã tham gia)
+        if (!urlParams.has('key')) {
+          statusEl.style.display = 'none';
+          return null;
+        }
+
+        statusEl.style.display = 'flex';
+        updateStatus('Đang kết nối', 'connecting');
+        
+        if (typeof window.io !== 'function') {
+          updateStatus('Mất kết nối', 'disconnected');
+          return null;
+        }
+
+        socket = io();
+
+        socket.on('connect', () => {
+          updateStatus('Đã kết nối', 'connected');
+          // Register với server khi connect
+          const key = urlParams.get('key');
+          if (key) {
+            socket.emit('register', { key });
+          }
+        });
+
+        socket.on('disconnect', (reason) => {
+          updateStatus('Mất kết nối', 'disconnected');
+        });
+
+        socket.on('connect_error', () => {
+          updateStatus('Mất kết nối', 'disconnected');
+        });
+
+        socket.io.on('reconnect_attempt', () => {
+          updateStatus('Đang kết nối', 'connecting');
+        });
+
+        socket.io.on('reconnect', () => {
+          updateStatus('Đã kết nối', 'connected');
+          // Register lại khi reconnect
+          const key = urlParams.get('key');
+          if (key) {
+            socket.emit('register', { key });
+          }
+        });
+
+        // Listen for evaluation mode
+        socket.on('evaluation_mode_started', () => {
+          window.isEvaluationMode = true;
+          if (typeof window.renderEvaluationForm === 'function') {
+            window.renderEvaluationForm();
+          }
+        });
+
+        return socket;
+      }
+
+      initSocket();
+      // Store socket globally để dùng ở renderAdminDashboard
+      window.socket = socket;
+    })();
+  </script>
+</body>
+</html>

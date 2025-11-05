@@ -1,0 +1,87 @@
+{
+    "roomCriteria": [
+      {
+        "id": 1,
+        "name": "Ý tưởng & sáng tạo",
+        "maxScore": 8,
+        "description": "Đánh giá tính sáng tạo và độc đáo của ý tưởng"
+      },
+      {
+        "id": 2,
+        "name": "Kiến thức về Ai Cập cổ đại",
+        "maxScore": 10,
+        "description": "Đánh giá mức độ hiểu biết về chủ đề"
+      },
+      {
+        "id": 3,
+        "name": "Ứng dụng STEM",
+        "maxScore": 10,
+        "description": "Đánh giá khả năng ứng dụng khoa học - kỹ thuật - toán"
+      },
+      {
+        "id": 4,
+        "name": "Hình thức & sản phẩm",
+        "maxScore": 6,
+        "description": "Đánh giá chất lượng và tính thẩm mỹ của sản phẩm"
+      },
+      {
+        "id": 5,
+        "name": "Làm việc nhóm & thuyết trình",
+        "maxScore": 6,
+        "description": "Đánh giá khả năng hợp tác và trình bày"
+      }
+    ],
+    "memberCriteria": [
+      {
+        "id": 1,
+        "name": "Ý tưởng sản phẩm",
+        "maxScore": 4,
+        "description": "Đánh giá mức độ hỗ trợ và giúp đỡ đồng đội"
+      },
+      {
+        "id": 2,
+        "name": "Hiểu biết về Ai Cập",
+        "maxScore": 8,
+        "description": "Đánh giá việc chia sẻ kiến thức và kinh nghiệm"
+      },
+      {
+        "id": 3,
+        "name": "Làm việc nhóm",
+        "maxScore": 2,
+        "description": "Đánh giá thái độ tích cực và chuyên nghiệp"
+      },
+      {
+        "id": 4,
+        "name": "Sản phẩm & thuyết trình",
+        "maxScore": 6,
+        "description": "Đánh giá mức độ đóng góp ý kiến xây dựng"
+      }
+    ],
+    "ratingLevels": [
+      {
+        "id": 4,
+        "name": "Xuất sắc",
+        "description": "Hoàn thành xuất sắc, vượt mong đợi",
+        "emoji": "😍"
+      },
+      {
+        "id": 3,
+        "name": "Tốt",
+        "description": "Hoàn thành tốt, đáp ứng yêu cầu",
+        "emoji": "😊"
+      },
+      {
+        "id": 2,
+        "name": "Đạt",
+        "description": "Hoàn thành cơ bản, đạt yêu cầu tối thiểu",
+        "emoji": "😐"
+      },
+      {
+        "id": 1,
+        "name": "Cần cố gắng",
+        "description": "Chưa đạt yêu cầu, cần cải thiện",
+        "emoji": "😔"
+      }
+    ]
+  }
+  
