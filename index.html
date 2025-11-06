@@ -195,6 +195,8 @@
           await renderAdminDashboard();
         } else if (role === 'member') {
           await renderMemberDashboard(key);
+        } else if (role === 'visitor') {
+          await renderVisitorDashboard(key, name);
         } else {
           const { card, body } = createCard('Thông tin truy cập');
           const wrap = document.createElement('div');
@@ -205,22 +207,6 @@
           p2.textContent = `Account key: ${key}`;
           wrap.appendChild(p1);
           wrap.appendChild(p2);
-          if (role === 'visitor') {
-            const p3 = document.createElement('p');
-            p3.textContent = `Tên: ${name || '—'}`;
-            wrap.appendChild(p3);
-            // Nút Đánh giá cho visitor
-            const evalBtn = document.createElement('button');
-            evalBtn.textContent = 'Đánh giá';
-            evalBtn.className = 'button button-action button-evaluate';
-            evalBtn.addEventListener('click', () => {
-              window.isEvaluationMode = true;
-              if (typeof window.renderEvaluationForm === 'function') {
-                window.renderEvaluationForm();
-              }
-            });
-            body.appendChild(evalBtn);
-          }
           const back = document.createElement('button');
           back.textContent = 'Đổi lựa chọn';
           back.className = 'button';
@@ -269,6 +255,64 @@
               if (diff < best.diff) best = { level: lvl, diff };
             });
             return best.level;
+          }
+
+          // Helper function to render rating levels as buttons
+          function renderRatingLevels(criterion, selectedLevel, score, maxScore) {
+            const container = document.createElement('div');
+            container.className = 'detail-criterion-row';
+            
+            const criterionName = document.createElement('div');
+            criterionName.className = 'detail-criterion-name';
+            criterionName.textContent = criterion.name || ('Tiêu chí ' + criterion.id);
+            container.appendChild(criterionName);
+            
+            const scoreText = document.createElement('div');
+            scoreText.className = 'detail-criterion-score';
+            if (score > 0) {
+              scoreText.appendChild(document.createTextNode('('));
+              const scoreSpan = document.createElement('span');
+              scoreSpan.style.fontWeight = 'bold';
+              scoreSpan.style.color = '#ef4444';
+              scoreSpan.textContent = score;
+              scoreText.appendChild(scoreSpan);
+              scoreText.appendChild(document.createTextNode(`/${maxScore})`));
+            } else {
+              scoreText.textContent = 'Chưa đánh giá';
+            }
+            container.appendChild(scoreText);
+            
+            const levelsContainer = document.createElement('div');
+            levelsContainer.className = 'detail-rating-levels';
+            
+            // Sort rating levels in descending order (4, 3, 2, 1)
+            const sortedLevels = [...ratingLevels].sort((a, b) => b.id - a.id);
+            
+            sortedLevels.forEach(level => {
+              const levelBtn = document.createElement('div');
+              levelBtn.className = 'detail-rating-btn';
+              
+              const isSelected = selectedLevel && selectedLevel.id === level.id;
+              if (isSelected) {
+                levelBtn.classList.add('detail-rating-btn-selected');
+              }
+              
+              const emoji = document.createElement('span');
+              emoji.className = 'detail-rating-emoji';
+              emoji.textContent = level.emoji || '';
+              
+              const text = document.createElement('span');
+              text.className = 'detail-rating-text';
+              text.textContent = level.name || '';
+              
+              levelBtn.appendChild(emoji);
+              levelBtn.appendChild(text);
+              levelsContainer.appendChild(levelBtn);
+            });
+            
+            container.appendChild(levelsContainer);
+            
+            return container;
           }
 
           const { card, body } = createCardNoHeader();
@@ -349,19 +393,14 @@
           const roomScore = (member.detail_score && member.detail_score.room && member.detail_score.room.score) || 0;
           adminTitle.textContent = `Điểm chủ phòng (${roomScore}/${roomMax})`;
           adminSection.appendChild(adminTitle);
-          const adminList = document.createElement('ul');
+          const adminList = document.createElement('div');
           adminList.className = 'detail-list';
           (roomCrit.criteria || []).forEach(c => {
-            const li = document.createElement('li');
             const item = (member.detail_score && member.detail_score.room && member.detail_score.room.criteria || []).find(x => x.id === c.id);
-            if (item) {
-              const lvl = inferLevelByScore(item.score, c.maxScore);
-              const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-              li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${item.score} điểm)`;
-            } else {
-              li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-            }
-            adminList.appendChild(li);
+            const score = item ? item.score : 0;
+            const selectedLevel = item ? inferLevelByScore(item.score, c.maxScore) : null;
+            const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+            adminList.appendChild(criterionRow);
           });
           adminSection.appendChild(adminList);
           detailSection.appendChild(adminSection);
@@ -373,32 +412,30 @@
             const perMemberScores = [];
             const memberSection = document.createElement('div');
             memberSection.className = 'detail-section';
-            const memberList = document.createElement('ul');
+            const memberList = document.createElement('div');
             memberList.className = 'detail-list';
             otherMembers.forEach(k => {
               const entry = member.detail_score && member.detail_score[k];
               const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
               perMemberScores.push(sc);
-              const li = document.createElement('li');
-              li.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
-              memberList.appendChild(li);
-              if (entry && entry.criteria && entry.criteria.length) {
-                const sub = document.createElement('ul');
-                sub.className = 'detail-sublist';
-                (memCrit.criteria || []).forEach(c => {
-                  const found = entry.criteria.find(x => x.id === c.id);
-                  const subLi = document.createElement('li');
-                  if (found) {
-                    const lvl = inferLevelByScore(found.score, c.maxScore);
-                    const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-                    subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
-                  } else {
-                    subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-                  }
-                  sub.appendChild(subLi);
-                });
-                memberList.appendChild(sub);
-              }
+              
+              // Member header
+              const memberHeader = document.createElement('div');
+              memberHeader.className = 'detail-member-header';
+              memberHeader.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
+              memberList.appendChild(memberHeader);
+              
+              // criteria breakdown under each
+              const sub = document.createElement('div');
+              sub.className = 'detail-sublist';
+              (memCrit.criteria || []).forEach(c => {
+                const found = entry && entry.criteria ? entry.criteria.find(x => x.id === c.id) : null;
+                const score = found ? found.score : 0;
+                const selectedLevel = found ? inferLevelByScore(found.score, c.maxScore) : null;
+                const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+                sub.appendChild(criterionRow);
+              });
+              memberList.appendChild(sub);
             });
             const memberAvg = perMemberScores.length ? Math.round((perMemberScores.reduce((a,b)=>a+b,0)/perMemberScores.length)*100)/100 : 0;
             const memberTitle = document.createElement('h4');
@@ -410,35 +447,35 @@
             // Section: Visitor
             const visitorSection = document.createElement('div');
             visitorSection.className = 'detail-section';
-            const visitors = (await (await fetch('/api/admin/visitors', { cache: 'no-store' })).json()).map(v => v.key);
-            const visitorList = document.createElement('ul');
+            const visitorsRes = await fetch('/api/members?rule=visitor', { cache: 'no-store' });
+            const visitors = visitorsRes.ok ? await visitorsRes.json() : [];
+            const visitorList = document.createElement('div');
             visitorList.className = 'detail-list';
             const visitorScores = [];
-            visitors.forEach(k => {
+            visitors.forEach(v => {
+              const k = v.key;
               const entry = member.detail_score && member.detail_score[k];
               const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
               if (sc > 0) {
                 visitorScores.push(sc);
-                const li = document.createElement('li');
-                li.textContent = `Điểm ${k} (${sc}/${memberMax})`;
-                visitorList.appendChild(li);
-                if (entry && entry.criteria && entry.criteria.length) {
-                  const sub = document.createElement('ul');
-                  sub.className = 'detail-sublist';
-                  (memCrit.criteria || []).forEach(c => {
-                    const found = entry.criteria.find(x => x.id === c.id);
-                    const subLi = document.createElement('li');
-                    if (found) {
-                      const lvl = inferLevelByScore(found.score, c.maxScore);
-                      const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-                      subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
-                    } else {
-                      subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-                    }
-                    sub.appendChild(subLi);
-                  });
-                  visitorList.appendChild(sub);
-                }
+                
+                // Visitor header
+                const visitorHeader = document.createElement('div');
+                visitorHeader.className = 'detail-member-header';
+                visitorHeader.textContent = `Điểm ${v.name || k} (${sc}/${memberMax})`;
+                visitorList.appendChild(visitorHeader);
+                
+                // criteria breakdown under each
+                const sub = document.createElement('div');
+                sub.className = 'detail-sublist';
+                (memCrit.criteria || []).forEach(c => {
+                  const found = entry && entry.criteria ? entry.criteria.find(x => x.id === c.id) : null;
+                  const score = found ? found.score : 0;
+                  const selectedLevel = found ? inferLevelByScore(found.score, c.maxScore) : null;
+                  const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+                  sub.appendChild(criterionRow);
+                });
+                visitorList.appendChild(sub);
               }
             });
             const visitorAvg = visitorScores.length ? Math.round((visitorScores.reduce((a,b)=>a+b,0)/visitorScores.length)*100)/100 : 0;
@@ -454,6 +491,73 @@
           body.appendChild(actionRow);
           body.appendChild(detailSection);
           app.appendChild(card);
+        } catch (err) {
+          app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Lỗi tải thông tin: ' + err.message + '</p></div></div>';
+        }
+      }
+
+      async function renderVisitorDashboard(key, name) {
+        try {
+          const container = document.createElement('div');
+          container.className = 'visitor-dashboard';
+          
+          // Title: Thầy/cô + tên
+          const titleBox = document.createElement('div');
+          titleBox.className = 'visitor-title-box';
+          const title = document.createElement('h1');
+          title.className = 'visitor-title';
+          title.textContent = `Thầy/cô ${name || 'Chưa có tên'}`;
+          titleBox.appendChild(title);
+          container.appendChild(titleBox);
+
+          // Danh sách nhóm
+          const membersBlock = document.createElement('div');
+          membersBlock.className = 'dashboard-block';
+          const membersTitle = document.createElement('h2');
+          membersTitle.textContent = 'Danh sách nhóm';
+          membersBlock.appendChild(membersTitle);
+          const membersList = document.createElement('div');
+          membersList.className = 'members-list';
+          membersBlock.appendChild(membersList);
+          container.appendChild(membersBlock);
+
+          // Nút Đánh giá ở dưới cùng, canh giữa
+          const actionBlock = document.createElement('div');
+          actionBlock.className = 'visitor-actions';
+          const evalBtn = document.createElement('button');
+          evalBtn.className = 'button button-action button-evaluate';
+          const evalIcon = document.createElement('span');
+          evalIcon.className = 'button-icon';
+          evalIcon.innerHTML = '⭐';
+          const evalText = document.createElement('span');
+          evalText.textContent = 'Đánh giá';
+          evalBtn.appendChild(evalIcon);
+          evalBtn.appendChild(evalText);
+          evalBtn.addEventListener('click', () => {
+            window.isEvaluationMode = true;
+            if (typeof window.renderEvaluationForm === 'function') {
+              window.renderEvaluationForm();
+            }
+          });
+          actionBlock.appendChild(evalBtn);
+          container.appendChild(actionBlock);
+
+          app.appendChild(container);
+
+          // Load danh sách nhóm
+          await loadAndRenderMembers(membersList);
+
+          // Auto refresh
+          let isRefreshing = false;
+          setInterval(async () => {
+            if (isRefreshing) return;
+            isRefreshing = true;
+            try {
+              await loadAndRenderMembers(membersList);
+            } finally {
+              isRefreshing = false;
+            }
+          }, 5000);
         } catch (err) {
           app.innerHTML = '<div class="card"><div class="card__body"><p style="color: #ef4444;">Lỗi tải thông tin: ' + err.message + '</p></div></div>';
         }
@@ -481,6 +585,18 @@
           titleBox.appendChild(title);
           container.appendChild(titleBox);
 
+          // Track all evaluation cards and their state
+          const evaluationCards = new Map();
+          const allEvaluations = new Map(); // targetKey -> { scores: {...}, form: formElement }
+          
+          // Helper to check if member already evaluated
+          function hasBeenEvaluated(memberDetail, evaluatorKey, evaluatorRole) {
+            if (!memberDetail || !memberDetail.detail_score) return false;
+            const storageKey = (evaluatorRole === 'admin') ? 'room' : evaluatorKey;
+            const entry = memberDetail.detail_score[storageKey];
+            return entry && typeof entry.score === 'number' && entry.score > 0;
+          }
+
           if (role === 'admin') {
             // Admin đánh giá 4 member
             const membersRes = await fetch('/api/members?rule=member');
@@ -492,9 +608,23 @@
             const criteriaRes = await fetch(`/api/criteria/${admin.evaluation_key || 'roomCriteria'}`);
             const criteriaData = await criteriaRes.json();
 
-            for (const member of members) {
-              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
-              container.appendChild(memberCard);
+            // Fetch all member details to check evaluation status
+            const memberDetailsPromises = members.map(m => 
+              fetch(`/api/member/${m.key}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+            );
+            const memberDetails = await Promise.all(memberDetailsPromises);
+
+            for (let i = 0; i < members.length; i++) {
+              const member = members[i];
+              const memberDetail = memberDetails[i];
+              
+              // Skip if already evaluated
+              if (hasBeenEvaluated(memberDetail, key, role)) continue;
+              
+              const { card, form, scores } = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(card);
+              evaluationCards.set(member.key, { card, form, scores, member, criteriaCount: criteriaData.criteria.length });
+              allEvaluations.set(member.key, { scores: {}, form });
             }
           } else if (role === 'member') {
             // Member đánh giá 3 nhóm còn lại
@@ -508,23 +638,185 @@
             const criteriaRes = await fetch(`/api/criteria/${currentMember.evaluation_key || 'memberCriteria'}`);
             const criteriaData = await criteriaRes.json();
 
-            for (const member of otherMembers) {
-              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
-              container.appendChild(memberCard);
+            // Fetch all member details to check evaluation status
+            const memberDetailsPromises = otherMembers.map(m => 
+              fetch(`/api/member/${m.key}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+            );
+            const memberDetails = await Promise.all(memberDetailsPromises);
+
+            for (let i = 0; i < otherMembers.length; i++) {
+              const member = otherMembers[i];
+              const memberDetail = memberDetails[i];
+              
+              // Skip if already evaluated
+              if (hasBeenEvaluated(memberDetail, key, role)) continue;
+              
+              const { card, form, scores } = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(card);
+              evaluationCards.set(member.key, { card, form, scores, member, criteriaCount: criteriaData.criteria.length });
+              allEvaluations.set(member.key, { scores: {}, form });
             }
           } else if (role === 'visitor') {
             // Visitor đánh giá 4 nhóm
             const membersRes = await fetch('/api/members?rule=member');
             const members = await membersRes.json();
             
-            // Visitor dùng roomCriteria
-            const criteriaRes = await fetch('/api/criteria/roomCriteria');
+            // Get visitor info to get evaluation_key
+            const visitorRes = await fetch(`/api/member/${key}`, { cache: 'no-store' });
+            const visitor = visitorRes.ok ? await visitorRes.json() : null;
+            const evaluationKey = (visitor && visitor.evaluation_key) ? visitor.evaluation_key : 'memberCriteria';
+            
+            // Visitor dùng evaluation_key từ member.json
+            const criteriaRes = await fetch(`/api/criteria/${evaluationKey}`);
             const criteriaData = await criteriaRes.json();
 
-            for (const member of members) {
-              const memberCard = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
-              container.appendChild(memberCard);
+            // Fetch all member details to check evaluation status
+            const memberDetailsPromises = members.map(m => 
+              fetch(`/api/member/${m.key}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+            );
+            const memberDetails = await Promise.all(memberDetailsPromises);
+
+            for (let i = 0; i < members.length; i++) {
+              const member = members[i];
+              const memberDetail = memberDetails[i];
+              
+              // Skip if already evaluated
+              if (hasBeenEvaluated(memberDetail, key, role)) continue;
+              
+              const { card, form, scores } = createEvaluationCard(member, criteriaData.criteria, criteriaData.ratingLevels, key, role);
+              container.appendChild(card);
+              evaluationCards.set(member.key, { card, form, scores, member, criteriaCount: criteriaData.criteria.length });
+              allEvaluations.set(member.key, { scores: {}, form });
             }
+          }
+
+          // Hiển thị thông báo nếu không có nhóm nào cần đánh giá
+          if (evaluationCards.size === 0) {
+            const noEvaluationMsg = document.createElement('div');
+            noEvaluationMsg.className = 'card';
+            noEvaluationMsg.style.textAlign = 'center';
+            noEvaluationMsg.style.padding = '32px';
+            noEvaluationMsg.style.marginTop = '24px';
+            noEvaluationMsg.innerHTML = '<div class="card__body"><p style="color: #22c55e; font-size: 18px;">✓ Bạn đã đánh giá đầy đủ tất cả các nhóm!</p></div>';
+            container.appendChild(noEvaluationMsg);
+            
+            // Thêm nút Home cho visitor, member và admin
+            if (role === 'visitor' || role === 'member' || role === 'admin') {
+              const homeBtn = document.createElement('button');
+              homeBtn.type = 'button';
+              homeBtn.className = 'button button-action button-evaluate';
+              homeBtn.textContent = 'Home';
+              homeBtn.style.marginTop = '24px';
+              homeBtn.style.width = 'auto';
+              homeBtn.style.padding = '12px 32px';
+              homeBtn.style.fontSize = '16px';
+              homeBtn.addEventListener('click', () => {
+                window.isEvaluationMode = false;
+                window.location.reload();
+              });
+              container.appendChild(homeBtn);
+            }
+          }
+
+          // Global submit button - chỉ hiển thị khi có card để đánh giá
+          if (evaluationCards.size > 0) {
+            const globalSubmitBtn = document.createElement('button');
+            globalSubmitBtn.type = 'button';
+            globalSubmitBtn.className = 'button button-action button-evaluate';
+            globalSubmitBtn.textContent = 'Lưu đánh giá';
+            globalSubmitBtn.style.display = 'none';
+            globalSubmitBtn.style.marginTop = '24px';
+            globalSubmitBtn.style.width = '100%';
+            globalSubmitBtn.style.padding = '16px';
+            globalSubmitBtn.style.fontSize = '18px';
+            
+            // Function to check if all evaluations are complete
+            function checkAllEvaluationsComplete() {
+              let allComplete = true;
+              let incompleteGroups = [];
+              
+              evaluationCards.forEach((data, targetKey) => {
+                const { scores, member, criteriaCount } = data;
+                if (Object.keys(scores).length !== criteriaCount) {
+                  allComplete = false;
+                  incompleteGroups.push(member.key.toUpperCase());
+                }
+              });
+              
+              if (allComplete && evaluationCards.size > 0) {
+                globalSubmitBtn.style.display = 'block';
+              } else {
+                globalSubmitBtn.style.display = 'none';
+              }
+              
+              return { allComplete, incompleteGroups };
+            }
+            
+            // Update submit button visibility when any score changes
+            evaluationCards.forEach((data, targetKey) => {
+              const { form, scores } = data;
+              
+              // Listen to form changes
+              form.addEventListener('change', () => {
+                checkAllEvaluationsComplete();
+              });
+            });
+            
+            globalSubmitBtn.addEventListener('click', async () => {
+              const { allComplete, incompleteGroups } = checkAllEvaluationsComplete();
+              
+              if (!allComplete) {
+                if (incompleteGroups.length > 0) {
+                  alert(`Vui lòng đánh giá đầy đủ tất cả tiêu chí cho các nhóm: ${incompleteGroups.join(', ')}`);
+                } else {
+                  alert('Vui lòng đánh giá đầy đủ tất cả các nhóm và tiêu chí');
+                }
+                return;
+              }
+              
+              // Submit all evaluations
+              const submitPromises = [];
+              evaluationCards.forEach((data, targetKey) => {
+                const { scores, member } = data;
+                const scoreData = Object.values(scores).map(s => ({
+                  id: s.id,
+                  score: s.score
+                }));
+                
+                submitPromises.push(
+                  fetch('/api/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      evaluatorKey: key,
+                      evaluatorRole: role,
+                      targetKey: member.key,
+                      scores: scoreData
+                    })
+                  })
+                );
+              });
+              
+              try {
+                const results = await Promise.all(submitPromises);
+                const allOk = results.every(r => r.ok);
+                if (allOk) {
+                  alert('Đã lưu tất cả đánh giá thành công!');
+                  window.isEvaluationMode = false;
+                  window.location.reload();
+                } else {
+                  const errors = await Promise.all(results.map(r => r.json().catch(() => ({ error: 'Unknown error' }))));
+                  alert('Lỗi khi lưu đánh giá: ' + errors.map(e => e.error || 'Lỗi không xác định').join(', '));
+                }
+              } catch (err) {
+                alert('Có lỗi xảy ra: ' + err.message);
+              }
+            });
+            
+            container.appendChild(globalSubmitBtn);
+            
+            // Initial check
+            setTimeout(() => checkAllEvaluationsComplete(), 100);
           }
 
           // Nút Hoàn thành (chỉ admin hiển thị)
@@ -532,6 +824,7 @@
             const finishBtn = document.createElement('button');
             finishBtn.className = 'button button-action button-evaluate';
             finishBtn.textContent = 'Hoàn thành đánh giá';
+            finishBtn.style.marginTop = '24px';
             finishBtn.addEventListener('click', async () => {
               if (!confirm('Xác nhận hoàn thành đánh giá và tính điểm cuối cùng?')) return;
               try {
@@ -687,55 +980,11 @@
           totalScoreValue.textContent = Math.round(total * 100) / 100;
         }
 
-        const submitBtn = document.createElement('button');
-        submitBtn.type = 'submit';
-        submitBtn.className = 'button evaluation-submit-btn';
-        submitBtn.textContent = 'Lưu đánh giá';
-        
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          
-          // Validate all criteria are selected
-          if (Object.keys(scores).length !== criteria.length) {
-            alert('Vui lòng đánh giá tất cả các tiêu chí');
-            return;
-          }
-          
-          const scoreData = Object.values(scores).map(s => ({
-            id: s.id,
-            score: s.score
-          }));
-          
-          try {
-            const res = await fetch('/api/evaluate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                evaluatorKey,
-                evaluatorRole,
-                targetKey: member.key,
-                scores: scoreData
-              })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-              alert('Lỗi: ' + (data.error || 'Không thể lưu đánh giá'));
-              return;
-            }
-            alert('Đã lưu đánh giá cho ' + member.key.toUpperCase());
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Đã lưu ✓';
-            submitBtn.style.background = '#22c55e';
-          } catch (err) {
-            alert('Có lỗi xảy ra: ' + err.message);
-          }
-        });
-        
-        form.appendChild(submitBtn);
+        // Không thêm submit button riêng - sẽ dùng global submit button
         body.appendChild(form);
         card.appendChild(body);
         
-        return card;
+        return { card, form, scores };
       }
 
       async function renderAdminDashboard() {
@@ -839,28 +1088,69 @@
         await loadAndRenderMembers(membersList);
         await loadAndRenderVisitors(visitorsList);
 
+        // Auto refresh every 5 seconds (reduced frequency to prevent jitter)
+        let isRefreshing = false;
+
         // Listen for status changes
         if (window.socket && typeof window.socket.on === 'function') {
           window.socket.on('member_status_change', async () => {
-            await loadAndRenderMembers(membersList);
-            await loadAndRenderVisitors(visitorsList);
+            if (!isRefreshing) {
+              isRefreshing = true;
+              try {
+                await Promise.all([
+                  loadAndRenderMembers(membersList),
+                  loadAndRenderVisitors(visitorsList)
+                ]);
+              } finally {
+                isRefreshing = false;
+              }
+            }
           });
         }
-
-        // Auto refresh every 3 seconds
         setInterval(async () => {
-          await loadAndRenderMembers(membersList);
-          await loadAndRenderVisitors(visitorsList);
-        }, 3000);
+          if (isRefreshing) return;
+          isRefreshing = true;
+          try {
+            await Promise.all([
+              loadAndRenderMembers(membersList),
+              loadAndRenderVisitors(visitorsList)
+            ]);
+          } finally {
+            isRefreshing = false;
+          }
+        }, 5000);
       }
 
       async function loadAndRenderMembers(container) {
         try {
-          const res = await fetch('/api/admin/members', { cache: 'no-store' });
-          if (!res.ok) throw new Error('Failed to load members');
-          const members = await res.json();
-          container.innerHTML = '';
-          members.forEach(m => {
+          const [membersRes, visitorsRes] = await Promise.all([
+            fetch('/api/admin/members', { cache: 'no-store' }),
+            fetch('/api/members?rule=visitor', { cache: 'no-store' })
+          ]);
+          if (!membersRes.ok) throw new Error('Failed to load members');
+          const members = await membersRes.json();
+          const visitors = visitorsRes.ok ? await visitorsRes.json() : [];
+          
+          // Batch fetch all member details in parallel
+          const memberDetailsPromises = members.map(m => 
+            fetch(`/api/member/${m.key}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+          );
+          const memberDetails = await Promise.all(memberDetailsPromises);
+          
+          // Create avatar map for quick lookup
+          const avatarMap = new Map();
+          memberDetails.forEach((md, idx) => {
+            if (md && md.key) {
+              avatarMap.set(md.key, md.avatar || '👤');
+            }
+          });
+          
+          // Create document fragment for smoother rendering
+          const fragment = document.createDocumentFragment();
+          
+          members.forEach((m, idx) => {
+            const memberDetail = memberDetails[idx];
+            
             const item = document.createElement('div');
             item.className = 'member-item';
             const statusDot = document.createElement('span');
@@ -876,6 +1166,58 @@
             score.textContent = `Điểm: ${m.score || 0}`;
             info.appendChild(keyName);
             info.appendChild(score);
+            
+            // Evaluation status box
+            const evalStatusBox = document.createElement('div');
+            evalStatusBox.className = 'member-eval-status-box';
+            
+            // Ô 1: Chủ phòng đã đánh giá
+            const adminBox = document.createElement('div');
+            adminBox.className = 'eval-status-cell';
+            if (memberDetail && memberDetail.detail_score && memberDetail.detail_score.room && memberDetail.detail_score.room.score > 0) {
+              const crownIcon = document.createElement('span');
+              crownIcon.className = 'eval-icon crown-icon';
+              crownIcon.textContent = '👑';
+              crownIcon.title = 'Chủ phòng đã đánh giá';
+              adminBox.appendChild(crownIcon);
+            }
+            
+            // Ô 2: Các nhóm đã đánh giá - hiển thị avatar
+            const memberBox = document.createElement('div');
+            memberBox.className = 'eval-status-cell';
+            if (memberDetail && memberDetail.detail_score) {
+              members.forEach(other => {
+                if (other.key !== m.key && memberDetail.detail_score[other.key] && memberDetail.detail_score[other.key].score > 0) {
+                  const memberIcon = document.createElement('span');
+                  memberIcon.className = 'eval-icon member-avatar-icon';
+                  const avatar = avatarMap.get(other.key) || '👤';
+                  memberIcon.textContent = avatar;
+                  memberIcon.title = `${other.key.toUpperCase()} đã đánh giá`;
+                  memberBox.appendChild(memberIcon);
+                }
+              });
+            }
+            
+            // Ô 3: Visitor đã đánh giá
+            const visitorBox = document.createElement('div');
+            visitorBox.className = 'eval-status-cell';
+            if (memberDetail && memberDetail.detail_score) {
+              visitors.forEach(v => {
+                if (memberDetail.detail_score[v.key] && memberDetail.detail_score[v.key].score > 0) {
+                  const visitorAvatar = document.createElement('span');
+                  visitorAvatar.className = 'eval-icon visitor-avatar';
+                  const firstLetter = (v.name || v.key || 'V').charAt(0).toUpperCase();
+                  visitorAvatar.textContent = firstLetter;
+                  visitorAvatar.title = `${v.name || v.key} đã đánh giá`;
+                  visitorBox.appendChild(visitorAvatar);
+                }
+              });
+            }
+            
+            evalStatusBox.appendChild(adminBox);
+            evalStatusBox.appendChild(memberBox);
+            evalStatusBox.appendChild(visitorBox);
+            
             const detailBtn = document.createElement('button');
             detailBtn.className = 'button button-small';
             detailBtn.textContent = 'Xem chi tiết';
@@ -884,9 +1226,13 @@
             });
             item.appendChild(statusDot);
             item.appendChild(info);
+            item.appendChild(evalStatusBox);
             item.appendChild(detailBtn);
-            container.appendChild(item);
+            fragment.appendChild(item);
           });
+          
+          container.innerHTML = '';
+          container.appendChild(fragment);
         } catch (err) {
           container.innerHTML = '<p style="color: #ef4444;">Lỗi tải danh sách nhóm</p>';
         }
@@ -965,6 +1311,64 @@
           return best.level;
         }
 
+        // Helper function to render rating levels as buttons
+        function renderRatingLevels(criterion, selectedLevel, score, maxScore) {
+          const container = document.createElement('div');
+          container.className = 'detail-criterion-row';
+          
+          const criterionName = document.createElement('div');
+          criterionName.className = 'detail-criterion-name';
+          criterionName.textContent = criterion.name || ('Tiêu chí ' + criterion.id);
+          container.appendChild(criterionName);
+          
+          const scoreText = document.createElement('div');
+          scoreText.className = 'detail-criterion-score';
+          if (score > 0) {
+            scoreText.appendChild(document.createTextNode('('));
+            const scoreSpan = document.createElement('span');
+            scoreSpan.style.fontWeight = 'bold';
+            scoreSpan.style.color = '#ef4444';
+            scoreSpan.textContent = score;
+            scoreText.appendChild(scoreSpan);
+            scoreText.appendChild(document.createTextNode(`/${maxScore})`));
+          } else {
+            scoreText.textContent = 'Chưa đánh giá';
+          }
+          container.appendChild(scoreText);
+          
+          const levelsContainer = document.createElement('div');
+          levelsContainer.className = 'detail-rating-levels';
+          
+          // Sort rating levels in descending order (4, 3, 2, 1)
+          const sortedLevels = [...ratingLevels].sort((a, b) => b.id - a.id);
+          
+          sortedLevels.forEach(level => {
+            const levelBtn = document.createElement('div');
+            levelBtn.className = 'detail-rating-btn';
+            
+            const isSelected = selectedLevel && selectedLevel.id === level.id;
+            if (isSelected) {
+              levelBtn.classList.add('detail-rating-btn-selected');
+            }
+            
+            const emoji = document.createElement('span');
+            emoji.className = 'detail-rating-emoji';
+            emoji.textContent = level.emoji || '';
+            
+            const text = document.createElement('span');
+            text.className = 'detail-rating-text';
+            text.textContent = level.name || '';
+            
+            levelBtn.appendChild(emoji);
+            levelBtn.appendChild(text);
+            levelsContainer.appendChild(levelBtn);
+          });
+          
+          container.appendChild(levelsContainer);
+          
+          return container;
+        }
+
         // Build modal
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -999,19 +1403,14 @@
         const roomScore = (member.detail_score && member.detail_score.room && member.detail_score.room.score) || 0;
         adminTitle.textContent = `Điểm chủ phòng (${roomScore}/${roomMax})`;
         adminSection.appendChild(adminTitle);
-        const adminList = document.createElement('ul');
+        const adminList = document.createElement('div');
         adminList.className = 'detail-list';
         (roomCrit.criteria || []).forEach(c => {
-          const li = document.createElement('li');
           const item = (member.detail_score && member.detail_score.room && member.detail_score.room.criteria || []).find(x => x.id === c.id);
-          if (item) {
-            const lvl = inferLevelByScore(item.score, c.maxScore);
-            const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-            li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${item.score} điểm)`;
-          } else {
-            li.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-          }
-          adminList.appendChild(li);
+          const score = item ? item.score : 0;
+          const selectedLevel = item ? inferLevelByScore(item.score, c.maxScore) : null;
+          const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+          adminList.appendChild(criterionRow);
         });
         adminSection.appendChild(adminList);
         content.appendChild(adminSection);
@@ -1022,33 +1421,30 @@
         const memberMax = sumMaxScore(memCrit.criteria);
         const otherMembers = (await (await fetch('/api/admin/members', { cache: 'no-store' })).json()).map(m => m.key).filter(k => k !== member.key);
         const perMemberScores = [];
-        const memberList = document.createElement('ul');
+        const memberList = document.createElement('div');
         memberList.className = 'detail-list';
         otherMembers.forEach(k => {
           const entry = member.detail_score && member.detail_score[k];
           const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
           perMemberScores.push(sc);
-          const li = document.createElement('li');
-          li.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
-          memberList.appendChild(li);
+          
+          // Member header
+          const memberHeader = document.createElement('div');
+          memberHeader.className = 'detail-member-header';
+          memberHeader.textContent = `Điểm ${k.toUpperCase()} (${sc}/${memberMax})`;
+          memberList.appendChild(memberHeader);
+          
           // criteria breakdown under each
-          if (entry && entry.criteria && entry.criteria.length) {
-            const sub = document.createElement('ul');
-            sub.className = 'detail-sublist';
-            (memCrit.criteria || []).forEach(c => {
-              const found = entry.criteria.find(x => x.id === c.id);
-              const subLi = document.createElement('li');
-              if (found) {
-                const lvl = inferLevelByScore(found.score, c.maxScore);
-                const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-                subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
-              } else {
-                subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-              }
-              sub.appendChild(subLi);
-            });
-            memberList.appendChild(sub);
-          }
+          const sub = document.createElement('div');
+          sub.className = 'detail-sublist';
+          (memCrit.criteria || []).forEach(c => {
+            const found = entry && entry.criteria ? entry.criteria.find(x => x.id === c.id) : null;
+            const score = found ? found.score : 0;
+            const selectedLevel = found ? inferLevelByScore(found.score, c.maxScore) : null;
+            const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+            sub.appendChild(criterionRow);
+          });
+          memberList.appendChild(sub);
         });
         const memberAvg = perMemberScores.length ? Math.round((perMemberScores.reduce((a,b)=>a+b,0)/perMemberScores.length)*100)/100 : 0;
         const memberTitle = document.createElement('h4');
@@ -1060,35 +1456,35 @@
         // Section: Visitor
         const visitorSection = document.createElement('div');
         visitorSection.className = 'detail-section';
-        const visitors = (await (await fetch('/api/admin/visitors', { cache: 'no-store' })).json()).map(v => v.key);
-        const visitorList = document.createElement('ul');
+        const visitorsRes = await fetch('/api/members?rule=visitor', { cache: 'no-store' });
+        const visitors = visitorsRes.ok ? await visitorsRes.json() : [];
+        const visitorList = document.createElement('div');
         visitorList.className = 'detail-list';
         const visitorScores = [];
-        visitors.forEach(k => {
+        visitors.forEach(v => {
+          const k = v.key;
           const entry = member.detail_score && member.detail_score[k];
           const sc = entry && typeof entry.score === 'number' ? entry.score : 0;
           if (sc > 0) {
             visitorScores.push(sc);
-            const li = document.createElement('li');
-            li.textContent = `Điểm ${k} (${sc}/${memberMax})`;
-            visitorList.appendChild(li);
-            if (entry && entry.criteria && entry.criteria.length) {
-              const sub = document.createElement('ul');
-              sub.className = 'detail-sublist';
-              (memCrit.criteria || []).forEach(c => {
-                const found = entry.criteria.find(x => x.id === c.id);
-                const subLi = document.createElement('li');
-                if (found) {
-                  const lvl = inferLevelByScore(found.score, c.maxScore);
-                  const label = lvl ? `${lvl.emoji || ''} ${lvl.name}`.trim() : '—';
-                  subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: ${label} (${found.score} điểm)`;
-                } else {
-                  subLi.textContent = `${c.name || ('Tiêu chí ' + c.id)}: Chưa đánh giá`;
-                }
-                sub.appendChild(subLi);
-              });
-              visitorList.appendChild(sub);
-            }
+            
+            // Visitor header
+            const visitorHeader = document.createElement('div');
+            visitorHeader.className = 'detail-member-header';
+            visitorHeader.textContent = `Điểm ${v.name || k} (${sc}/${memberMax})`;
+            visitorList.appendChild(visitorHeader);
+            
+            // criteria breakdown under each
+            const sub = document.createElement('div');
+            sub.className = 'detail-sublist';
+            (memCrit.criteria || []).forEach(c => {
+              const found = entry && entry.criteria ? entry.criteria.find(x => x.id === c.id) : null;
+              const score = found ? found.score : 0;
+              const selectedLevel = found ? inferLevelByScore(found.score, c.maxScore) : null;
+              const criterionRow = renderRatingLevels(c, selectedLevel, score, c.maxScore);
+              sub.appendChild(criterionRow);
+            });
+            visitorList.appendChild(sub);
           }
         });
         const visitorAvg = visitorScores.length ? Math.round((visitorScores.reduce((a,b)=>a+b,0)/visitorScores.length)*100)/100 : 0;

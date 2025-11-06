@@ -10,32 +10,32 @@
         {
             "id": 11,
             "key": "nhom1",
-            "name": "a",
+            "name": "",
             "rule": "member",
-            "score": 46.67,
+            "score": 30,
             "detail_score": {
                 "room": {
-                    "score": 40,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 10
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 10
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         },
                         {
                             "id": 5,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
@@ -61,23 +61,23 @@
                     ]
                 },
                 "nhom3": {
-                    "score": 20,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 4
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 2
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
@@ -124,44 +124,48 @@
                     ]
                 },
                 "visitor1": {
-                    "score": 0,
+                    "score": 40,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 8
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 10
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 10
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 6
+                        },
+                        {
+                            "id": 5,
+                            "score": 6
                         }
                     ]
                 },
                 "visitor2": {
-                    "score": 0,
+                    "score": 20,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 4
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 8
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 2
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 6
                         }
                     ]
                 },
@@ -325,7 +329,7 @@
             "key": "nhom2",
             "name": "",
             "rule": "member",
-            "score": 13,
+            "score": 22.5,
             "detail_score": {
                 "room": {
                     "score": 0,
@@ -353,44 +357,44 @@
                     ]
                 },
                 "nhom1": {
-                    "score": 19,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 4
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 1
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
                 "nhom3": {
-                    "score": 20,
+                    "score": 0,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 4
+                            "score": 0
                         },
                         {
                             "id": 2,
-                            "score": 8
+                            "score": 0
                         },
                         {
                             "id": 3,
-                            "score": 2
+                            "score": 0
                         },
                         {
                             "id": 4,
-                            "score": 6
+                            "score": 0
                         }
                     ]
                 },
@@ -437,44 +441,48 @@
                     ]
                 },
                 "visitor1": {
-                    "score": 0,
+                    "score": 30,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 6
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 7.5
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 7.5
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 4.5
+                        },
+                        {
+                            "id": 5,
+                            "score": 4.5
                         }
                     ]
                 },
                 "visitor2": {
-                    "score": 0,
+                    "score": 15,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 3
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 6
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 1.5
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 4.5
                         }
                     ]
                 },
@@ -592,7 +600,7 @@
             "key": "nhom3",
             "name": "",
             "rule": "member",
-            "score": 0,
+            "score": 15,
             "detail_score": {
                 "room": {
                     "score": 0,
@@ -704,44 +712,48 @@
                     ]
                 },
                 "visitor1": {
-                    "score": 0,
+                    "score": 20,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 4
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 5
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 5
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 3
+                        },
+                        {
+                            "id": 5,
+                            "score": 3
                         }
                     ]
                 },
                 "visitor2": {
-                    "score": 0,
+                    "score": 10,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 2
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 4
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 1
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 3
                         }
                     ]
                 },
@@ -893,7 +905,7 @@
             "key": "nhom4",
             "name": "",
             "rule": "member",
-            "score": 0,
+            "score": 15,
             "detail_score": {
                 "room": {
                     "score": 0,
@@ -1005,44 +1017,48 @@
                     ]
                 },
                 "visitor1": {
-                    "score": 0,
+                    "score": 10,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 2
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 2.5
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 2.5
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 1.5
+                        },
+                        {
+                            "id": 5,
+                            "score": 1.5
                         }
                     ]
                 },
                 "visitor2": {
-                    "score": 0,
+                    "score": 20,
                     "criteria": [
                         {
                             "id": 1,
-                            "score": 0
+                            "score": 4
                         },
                         {
                             "id": 2,
-                            "score": 0
+                            "score": 8
                         },
                         {
                             "id": 3,
-                            "score": 0
+                            "score": 2
                         },
                         {
                             "id": 4,
-                            "score": 0
+                            "score": 6
                         }
                     ]
                 },
@@ -1207,14 +1223,14 @@
         {
             "id": 16,
             "key": "visitor1",
-            "name": "Như ý",
+            "name": "ll",
             "rule": "visitor",
             "evaluation_key": "memberCriteria"
         },
         {
             "id": 17,
             "key": "visitor2",
-            "name": "",
+            "name": "aaaa",
             "rule": "visitor",
             "evaluation_key": "memberCriteria"
         },
