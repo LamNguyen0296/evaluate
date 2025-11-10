@@ -1047,6 +1047,19 @@
           }
         });
         
+        const endBtn = document.createElement('button');
+        endBtn.className = 'button button-action button-finish';
+        const endIcon = document.createElement('span');
+        endIcon.className = 'button-icon';
+        endIcon.innerHTML = '🏁';
+        const endText = document.createElement('span');
+        endText.textContent = 'Kết thúc';
+        endBtn.appendChild(endIcon);
+        endBtn.appendChild(endText);
+        endBtn.addEventListener('click', () => {
+          openFinalSummaryPopup();
+        });
+        
         const refreshBtn = document.createElement('button');
         refreshBtn.className = 'button button-action button-refresh';
         const refreshIcon = document.createElement('span');
@@ -1079,6 +1092,7 @@
         });
         
         actionBlock.appendChild(evaluateBtn);
+        actionBlock.appendChild(endBtn);
         actionBlock.appendChild(refreshBtn);
         container.appendChild(actionBlock);
 
@@ -1256,8 +1270,10 @@
             keyName.textContent = `Thầy/cô: ${v.name || 'Chưa có tên'}`;
             const evaluated = document.createElement('div');
             evaluated.className = 'visitor-evaluated';
-            evaluated.textContent = v.hasEvaluated ? 'Đã đánh giá' : 'Chưa đánh giá';
-            evaluated.style.color = v.hasEvaluated ? '#22c55e' : '#f59e0b';
+            const hasEvaluated =
+              !!(v.hasEvaluated ?? v.has_evaluated ?? v.evaluated ?? v.evaluated_at ?? v.evaluatedAt);
+            evaluated.textContent = hasEvaluated ? 'Đã đánh giá' : 'Chưa đánh giá';
+            evaluated.style.color = hasEvaluated ? '#22c55e' : '#f59e0b';
             item.appendChild(keyName);
             item.appendChild(evaluated);
             container.appendChild(item);
@@ -1273,6 +1289,141 @@
         renderSummary();
       }
     })();
+
+    async function openFinalSummaryPopup() {
+      const existing = document.querySelector('.modal-overlay.final-summary-overlay');
+      if (existing) {
+        document.body.removeChild(existing);
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay final-summary-overlay';
+
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+
+      const header = document.createElement('div');
+      header.className = 'modal-header';
+
+      const title = document.createElement('h3');
+      title.className = 'modal-title';
+      title.textContent = 'Kết thúc đánh giá';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'button button-small modal-close';
+      closeBtn.textContent = 'Đóng';
+      closeBtn.addEventListener('click', () => {
+        if (document.body.contains(overlay)) {
+          document.body.removeChild(overlay);
+        }
+      });
+
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+
+      const content = document.createElement('div');
+      content.className = 'modal-content final-summary-content';
+
+      const rankingList = document.createElement('div');
+      rankingList.className = 'final-ranking-list';
+      const loadingState = document.createElement('div');
+      loadingState.className = 'final-ranking-loading';
+      loadingState.innerHTML = '<span class="final-ranking-spinner"></span><span>Đang tải kết quả...</span>';
+      rankingList.appendChild(loadingState);
+      content.appendChild(rankingList);
+
+      modal.appendChild(header);
+      modal.appendChild(content);
+      overlay.appendChild(modal);
+
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay && document.body.contains(overlay)) {
+          document.body.removeChild(overlay);
+        }
+      });
+
+      document.body.appendChild(overlay);
+
+      try {
+        const res = await fetch('/database/member.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Không thể tải dữ liệu');
+
+        const data = await res.json();
+        const members = Array.isArray(data?.members) ? data.members : [];
+        const memberRankings = members
+          .filter(m => (m.rule || '').toLowerCase() === 'member')
+          .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        rankingList.innerHTML = '';
+
+        if (!memberRankings.length) {
+          const emptyState = document.createElement('p');
+          emptyState.textContent = 'Chưa có dữ liệu xếp hạng.';
+          rankingList.appendChild(emptyState);
+          return;
+        }
+
+        memberRankings.forEach((member, idx) => {
+          const item = document.createElement('div');
+          item.className = 'final-ranking-item';
+          if (idx === 0) item.classList.add('final-ranking-item-first');
+          if (idx === 1) item.classList.add('final-ranking-item-second');
+          if (idx === 2) item.classList.add('final-ranking-item-third');
+
+          const rankBadge = document.createElement('div');
+          rankBadge.className = 'final-ranking-rank';
+          rankBadge.textContent = `#${idx + 1}`;
+          item.appendChild(rankBadge);
+
+          const avatarWrap = document.createElement('div');
+          avatarWrap.className = 'final-ranking-avatar';
+          const avatar = member.avatar && member.avatar.trim()
+            ? member.avatar.trim()
+            : (member.name && member.name.trim()
+              ? member.name.trim().charAt(0).toUpperCase()
+              : (member.key ? member.key.charAt(0).toUpperCase() : '🏅'));
+          avatarWrap.textContent = avatar;
+          item.appendChild(avatarWrap);
+
+          const info = document.createElement('div');
+          info.className = 'final-ranking-info';
+
+          const name = document.createElement('div');
+          name.className = 'final-ranking-name';
+          name.textContent = member.name && member.name.trim() ? member.name.trim() : 'Chưa có tên';
+
+          const meta = document.createElement('div');
+          meta.className = 'final-ranking-meta';
+          meta.textContent = member.key ? member.key.toUpperCase() : 'N/A';
+
+          info.appendChild(name);
+          info.appendChild(meta);
+
+          item.appendChild(info);
+
+          const scoreWrap = document.createElement('div');
+          scoreWrap.className = 'final-ranking-score';
+          const rawScore = typeof member.score === 'number' ? member.score : 0;
+          const scoreValue = Math.ceil(rawScore);
+          scoreWrap.innerHTML = `
+            <span class="score-icon-bulb">💡</span>
+            <span class="score-number-badge">
+              <span class="score-number">${scoreValue}</span>
+            </span>
+          `;
+          item.appendChild(scoreWrap);
+
+          rankingList.appendChild(item);
+        });
+      } catch (error) {
+        rankingList.innerHTML = '';
+        const errorState = document.createElement('p');
+        errorState.style.color = '#ef4444';
+        errorState.textContent = 'Không thể tải dữ liệu xếp hạng. Vui lòng thử lại.';
+        rankingList.appendChild(errorState);
+        console.error(error);
+      }
+    }
 
     // Modal detail for member breakdown
     async function openMemberDetailPopup(memberKey) {
