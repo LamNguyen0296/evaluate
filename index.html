@@ -1257,6 +1257,43 @@
           const res = await fetch('/api/admin/visitors', { cache: 'no-store' });
           if (!res.ok) throw new Error('Failed to load visitors');
           const visitors = await res.json();
+
+          // Build evaluation status map by checking member detail scores from member.json
+          const visitorEvalStatus = new Map();
+          try {
+            const memberRes = await fetch('/database/member.json', { cache: 'no-store' });
+            if (memberRes.ok) {
+              const memberData = await memberRes.json();
+              const memberList = Array.isArray(memberData?.members)
+                ? memberData.members.filter(m => (m.rule || '').toLowerCase() === 'member')
+                : [];
+
+              memberList.forEach(member => {
+                const detailScore = member?.detail_score || {};
+                Object.entries(detailScore).forEach(([evaluatorKey, evaluatorScore]) => {
+                  const normalizedKey = (evaluatorKey || '').toLowerCase();
+                  if (!normalizedKey) return;
+
+                  const totalScore = typeof evaluatorScore?.score === 'number' ? evaluatorScore.score : 0;
+                  const criteriaScores = Array.isArray(evaluatorScore?.criteria)
+                    ? evaluatorScore.criteria
+                    : (Array.isArray(evaluatorScore?.detail) ? evaluatorScore.detail : []);
+                  const hasCriteriaScore = Array.isArray(criteriaScores)
+                    ? criteriaScores.some(c => (c?.score || 0) > 0)
+                    : false;
+
+                  if (totalScore > 0 || hasCriteriaScore) {
+                    visitorEvalStatus.set(normalizedKey, true);
+                  } else if (!visitorEvalStatus.has(normalizedKey)) {
+                    visitorEvalStatus.set(normalizedKey, false);
+                  }
+                });
+              });
+            }
+          } catch (scoreErr) {
+            console.warn('Không thể kiểm tra trạng thái đánh giá của Thầy/Cô:', scoreErr);
+          }
+
           container.innerHTML = '';
           if (visitors.length === 0) {
             container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 20px;">Chưa có Thầy/Cô nào đang online</p>';
@@ -1270,7 +1307,12 @@
             keyName.textContent = `Thầy/cô: ${v.name || 'Chưa có tên'}`;
             const evaluated = document.createElement('div');
             evaluated.className = 'visitor-evaluated';
+            const normalizedVisitorKey = (v.key || v.id || v.slug || '').toLowerCase();
+            const evaluatedFromMembers = normalizedVisitorKey
+              ? visitorEvalStatus.get(normalizedVisitorKey) === true
+              : false;
             const hasEvaluated =
+              evaluatedFromMembers ||
               !!(v.hasEvaluated ?? v.has_evaluated ?? v.evaluated ?? v.evaluated_at ?? v.evaluatedAt);
             evaluated.textContent = hasEvaluated ? 'Đã đánh giá' : 'Chưa đánh giá';
             evaluated.style.color = hasEvaluated ? '#22c55e' : '#f59e0b';
